@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Titlebar, Sidebar, StatusBar } from '../components';
+import { Titlebar, Sidebar, StatusBar, EmptyState } from '../components';
 import WorkflowDetail from '../components/WorkflowDetail';
 import { useWorkflows } from '../hooks/useWorkflows';
 import { useRuns } from '../hooks/useRuns';
@@ -79,6 +79,16 @@ export default function Dashboard() {
     if (selectedWorkflow) {
       triggerRun(selectedWorkflow.id).catch(console.error);
     }
+  }
+
+  // Show EmptyState welcome screen when workflows have loaded and none exist
+  if (!wfLoading && workflows.length === 0) {
+    return (
+      <EmptyState
+        processCount={processes.length}
+        activeRuns={activeRuns}
+      />
+    );
   }
 
   return (
