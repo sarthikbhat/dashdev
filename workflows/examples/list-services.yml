@@ -1,0 +1,17 @@
+name: Check Service Status
+description: Show which TM backend services are running
+icon: gear
+tags: [infra, status]
+steps:
+  - name: Check Ports
+    command: |
+      echo "=== TM Backend Services ==="
+      for port in 3100 3000 8080 9090 9091 9093; do
+        if lsof -i :$port -sTCP:LISTEN >/dev/null 2>&1; then
+          echo "  Port $port: RUNNING"
+        else
+          echo "  Port $port: DOWN"
+        fi
+      done
+    type: run-and-done
+    timeout: 15

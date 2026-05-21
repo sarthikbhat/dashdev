@@ -1,0 +1,23 @@
+name: Enable Redis Flag
+description: Set a Redis key to enable/disable a feature flag
+icon: flag
+tags: [redis, feature-flag]
+params:
+  - name: flag_name
+    label: Flag Name
+    type: text
+    required: true
+  - name: flag_value
+    label: Value
+    type: select
+    options: ["true", "false"]
+    default: "true"
+steps:
+  - name: Set Redis Flag
+    command: redis-cli SET ${flag_name} ${flag_value}
+    type: run-and-done
+    timeout: 10
+  - name: Verify Flag
+    command: redis-cli GET ${flag_name}
+    type: run-and-done
+    timeout: 10
