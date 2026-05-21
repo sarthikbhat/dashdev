@@ -1,12 +1,14 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Titlebar, Sidebar, StatusBar, EmptyState } from '../components';
 import WorkflowDetail from '../components/WorkflowDetail';
+import ParamModal from '../components/ParamModal';
+import RunView from '../components/RunView';
 import { useWorkflows } from '../hooks/useWorkflows';
 import { useRuns } from '../hooks/useRuns';
 import { useProcesses } from '../hooks/useProcesses';
 import Icon from '../components/Icon';
-import { triggerRun } from '../api';
+import { triggerRun, listRuns } from '../api';
 
 // Stable color palette for workflow glyphs
 const GLYPH_COLORS = [
@@ -52,6 +54,10 @@ export default function Dashboard() {
 
   const selectedWorkflow = workflowId ? workflows.find((w) => w.id === workflowId) ?? null : null;
 
+  // ParamModal + RunView state
+  const [showParamModal, setShowParamModal] = useState(false);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+
   // Sidebar entries
   const sidebarWorkflows = workflows.map((wf, i) => ({
     id: wf.id,
@@ -74,11 +80,52 @@ export default function Dashboard() {
     navigate('/workflow/new/edit');
   }
 
-  function handleRun() {
-    // Trigger run with default params; ParamModal is Task 14
-    if (selectedWorkflow) {
-      triggerRun(selectedWorkflow.id).catch(console.error);
+  // After triggering a run, poll for the new run ID
+  async function pollForRunId(wfId: string) {
+    // API returns 202 without run_id; wait then fetch newest running run
+    await new Promise((r) => setTimeout(r, 500));
+    try {
+      const recentRuns = await listRuns(wfId);
+      const newest = recentRuns.find((r) => r.status === 'running');
+      if (newest) {
+        setActiveRunId(newest.id);
+      }
+    } catch (e) {
+      console.error('Failed to poll for run ID:', e);
     }
+  }
+
+  function handleRun() {
+    if (!selectedWorkflow) return;
+    // If workflow has params, show the ParamModal first
+    if (selectedWorkflow.params && selectedWorkflow.params.length > 0) {
+      setShowParamModal(true);
+    } else {
+      // No params — trigger directly
+      triggerRun(selectedWorkflow.id)
+        .then(() => pollForRunId(selectedWorkflow.id))
+        .catch(console.error);
+    }
+  }
+
+  function handleParamRun(values: Record<string, string>) {
+    if (!selectedWorkflow) return;
+    setShowParamModal(false);
+    triggerRun(selectedWorkflow.id, values)
+      .then(() => pollForRunId(selectedWorkflow.id))
+      .catch(console.error);
+  }
+
+  function handleParamCancel() {
+    setShowParamModal(false);
+  }
+
+  function handleRunBack() {
+    setActiveRunId(null);
+  }
+
+  function handleRunCancel() {
+    setActiveRunId(null);
   }
 
   // Show EmptyState welcome screen when workflows have loaded and none exist
@@ -87,6 +134,42 @@ export default function Dashboard() {
       <EmptyState
         processCount={processes.length}
         activeRuns={activeRuns}
+      />
+    );
+  }
+
+  // If ParamModal is open, render it as full-screen overlay
+  if (showParamModal && selectedWorkflow) {
+    const wfIcon = {
+      ch: (selectedWorkflow.name[0] ?? 'W').toUpperCase(),
+      color: assignColor(workflows.indexOf(selectedWorkflow)),
+    };
+    return (
+      <ParamModal
+        workflow={{
+          name: selectedWorkflow.name,
+          icon: wfIcon,
+          params: selectedWorkflow.params ?? [],
+        }}
+        onRun={handleParamRun}
+        onCancel={handleParamCancel}
+      />
+    );
+  }
+
+  // If a run is active, render RunView
+  if (activeRunId && selectedWorkflow) {
+    const wfIcon = {
+      ch: (selectedWorkflow.name[0] ?? 'W').toUpperCase(),
+      color: assignColor(workflows.indexOf(selectedWorkflow)),
+    };
+    return (
+      <RunView
+        runId={activeRunId}
+        workflowName={selectedWorkflow.name}
+        workflowIcon={wfIcon}
+        onCancel={handleRunCancel}
+        onBack={handleRunBack}
       />
     );
   }

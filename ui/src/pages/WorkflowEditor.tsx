@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Titlebar, Sidebar, StatusBar, Icon, Badge, Glyph, Tag, Kbd } from '../components';
 import { useWorkflows } from '../hooks/useWorkflows';
@@ -34,10 +34,14 @@ function StepCard({
   step,
   expanded,
   onToggle,
+  onUpdate,
+  onRemove,
 }: {
   step: LocalStep;
   expanded: boolean;
   onToggle: () => void;
+  onUpdate?: (patch: Partial<LocalStep>) => void;
+  onRemove?: () => void;
 }) {
   return (
     <div
@@ -97,7 +101,7 @@ function StepCard({
           }}
         >
           <span style={{ fontSize: 12, color: 'var(--dd-text-2)' }}>Name</span>
-          <input className="input" defaultValue={step.name} />
+          <input className="input" value={step.name} onChange={(e) => onUpdate?.({ name: e.target.value })} />
 
           <span style={{ fontSize: 12, color: 'var(--dd-text-2)' }}>Type</span>
           <div style={{ display: 'flex', gap: 4 }}>
@@ -105,6 +109,7 @@ function StepCard({
               <button
                 key={t}
                 className="btn btn-sm"
+                onClick={() => onUpdate?.({ type: t })}
                 style={{
                   padding: '4px 10px',
                   fontSize: 11,
@@ -120,17 +125,18 @@ function StepCard({
           </div>
 
           <span style={{ fontSize: 12, color: 'var(--dd-text-2)' }}>Command</span>
-          <input className="input mono" style={{ fontSize: 12 }} defaultValue={step.cmd} />
+          <input className="input mono" style={{ fontSize: 12 }} value={step.cmd} onChange={(e) => onUpdate?.({ cmd: e.target.value })} />
 
           <span style={{ fontSize: 12, color: 'var(--dd-text-2)' }}>Workdir</span>
-          <input className="input mono" style={{ fontSize: 12 }} defaultValue={step.wd} />
+          <input className="input mono" style={{ fontSize: 12 }} value={step.wd} onChange={(e) => onUpdate?.({ wd: e.target.value })} />
 
           <span style={{ fontSize: 12, color: 'var(--dd-text-2)' }}>Timeout</span>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <input
               className="input mono"
               style={{ fontSize: 12, width: 100 }}
-              defaultValue={step.timeout}
+              value={step.timeout}
+              onChange={(e) => onUpdate?.({ timeout: e.target.value })}
             />
             <span style={{ fontSize: 11, color: 'var(--dd-text-4)' }}>kills step if exceeded</span>
           </div>
@@ -147,6 +153,7 @@ function StepCard({
               <button
                 key={o.v}
                 className="btn btn-sm"
+                onClick={() => onUpdate?.({ onFail: o.v })}
                 style={{
                   padding: '4px 10px',
                   fontSize: 11,
@@ -163,11 +170,7 @@ function StepCard({
 
           <div />
           <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
-            <button className="btn btn-ghost btn-sm">
-              <Icon name="content_copy" size={12} />
-              Duplicate
-            </button>
-            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--dd-red)' }}>
+            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--dd-red)' }} onClick={onRemove}>
               <Icon name="delete_outline" size={12} />
               Remove step
             </button>
@@ -180,8 +183,19 @@ function StepCard({
 
 // ── FormMode ───────────────────────────────────────────────────────────────
 
-function FormMode({ workflow }: { workflow: Workflow | null }) {
-  const defaultSteps: LocalStep[] = workflow
+interface FormModeProps {
+  workflow: Workflow | null;
+  formStateRef: React.MutableRefObject<{
+    name: string;
+    description: string;
+    icon: string;
+    tags: string[];
+    steps: LocalStep[];
+  }>;
+}
+
+function FormMode({ workflow, formStateRef }: FormModeProps) {
+  const initialSteps: LocalStep[] = workflow
     ? workflow.steps.map((s, i) => ({
         id: i + 1,
         name: s.name,
@@ -191,23 +205,21 @@ function FormMode({ workflow }: { workflow: Workflow | null }) {
         timeout: s.timeout ? `${s.timeout}s` : '30s',
         onFail: s.on_failure === 'continue' ? 'continue' : s.on_failure?.startsWith('retry') ? 'retry' : 'abort',
       }))
-    : [
-        { id: 1, name: 'Verify clean git tree', cmd: 'git status --porcelain', wd: '/', type: 'shell', timeout: '30s', onFail: 'abort' },
-        { id: 2, name: 'Install dependencies', cmd: 'npm ci --prefer-offline', wd: '~/app', type: 'shell', timeout: '5m', onFail: 'abort' },
-        { id: 3, name: 'Run unit tests', cmd: 'npm test -- --coverage', wd: '~/app', type: 'shell', timeout: '10m', onFail: 'abort' },
-        { id: 4, name: 'Build production bundle', cmd: 'npm run build:staging', wd: '~/app', type: 'shell', timeout: '5m', onFail: 'abort' },
-        { id: 5, name: 'Push to staging cluster', cmd: 'kubectl apply -f "k8s/staging"', wd: '~/infra', type: 'shell', timeout: '5m', onFail: 'retry' },
-        { id: 6, name: 'Notify Slack channel', cmd: 'curl -X POST $SLACK_HOOK', wd: '/', type: 'shell', timeout: '30s', onFail: 'continue' },
-      ];
+    : [];
 
-  const [steps] = useState<LocalStep[]>(defaultSteps);
-  const [expanded, setExpanded] = useState<number | null>(4);
+  const [name, setName] = useState(workflow?.name ?? '');
+  const [description, setDescription] = useState(workflow?.description ?? '');
+  const [icon, setIconVal] = useState(workflow?.icon ?? 'W');
+  const [tags, setTags] = useState<string[]>(workflow?.tags ?? []);
+  const [steps, setSteps] = useState<LocalStep[]>(initialSteps);
+  const [expanded, setExpanded] = useState<number | null>(null);
 
-  const params = workflow?.params ?? [
-    { name: 'branch', type: 'text' as const, label: 'Branch', default: 'main', required: true },
-    { name: 'skip_tests', type: 'toggle' as const, label: 'Skip tests', default: 'false', required: false },
-    { name: 'region', type: 'select' as const, label: 'Region', default: 'us-east-1', required: true },
-  ];
+  // Keep formStateRef in sync so the parent Save button can read current values
+  useEffect(() => {
+    formStateRef.current = { name, description, icon, tags, steps };
+  }, [name, description, icon, tags, steps, formStateRef]);
+
+  const params = workflow?.params ?? [];
 
   const colorOptions = [
     'var(--dd-red)',
@@ -217,6 +229,31 @@ function FormMode({ workflow }: { workflow: Workflow | null }) {
     'var(--dd-purple)',
     'var(--dd-cyan)',
   ];
+
+  function addStep() {
+    const nextId = steps.length > 0 ? Math.max(...steps.map((s) => s.id)) + 1 : 1;
+    setSteps([
+      ...steps,
+      {
+        id: nextId,
+        name: `Step ${nextId}`,
+        cmd: '',
+        wd: '/',
+        type: 'shell',
+        timeout: '30s',
+        onFail: 'abort',
+      },
+    ]);
+    setExpanded(nextId);
+  }
+
+  function removeStep(id: number) {
+    setSteps(steps.filter((s) => s.id !== id));
+  }
+
+  function updateStep(id: number, patch: Partial<LocalStep>) {
+    setSteps(steps.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  }
 
   return (
     <div style={{ flex: 1, overflow: 'auto', padding: '18px 22px' }}>
@@ -235,7 +272,9 @@ function FormMode({ workflow }: { workflow: Workflow | null }) {
         <FormLabel>Name</FormLabel>
         <input
           className="input"
-          defaultValue={workflow?.name ?? 'Deploy to staging'}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Workflow name"
           style={{ maxWidth: 400 }}
         />
 
@@ -244,18 +283,18 @@ function FormMode({ workflow }: { workflow: Workflow | null }) {
           className="input"
           rows={2}
           style={{ resize: 'vertical', maxWidth: 560 }}
-          defaultValue={
-            workflow?.description ??
-            'Builds the app, runs smoke tests, and pushes to staging cluster. Notifies #deploys on completion.'
-          }
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Describe what this workflow does"
         />
 
         <FormLabel>Icon &amp; color</FormLabel>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <Glyph ch={workflow?.icon ?? 'D'} color="var(--dd-amber)" />
+          <Glyph ch={icon || 'W'} color="var(--dd-amber)" />
           <input
             className="input mono"
-            defaultValue={workflow?.icon ?? 'D'}
+            value={icon}
+            onChange={(e) => setIconVal(e.target.value.slice(0, 2))}
             style={{ width: 44, textAlign: 'center' }}
           />
           <div style={{ display: 'flex', gap: 4 }}>
@@ -281,12 +320,27 @@ function FormMode({ workflow }: { workflow: Workflow | null }) {
 
         <FormLabel>Tags</FormLabel>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-          {(workflow?.tags ?? ['deploy', 'staging']).map((tag) => (
-            <Tag key={tag}>{tag}</Tag>
+          {tags.map((tag) => (
+            <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <Tag>{tag}</Tag>
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ padding: '0 2px', fontSize: 10, color: 'var(--dd-text-4)' }}
+                onClick={() => setTags(tags.filter((t) => t !== tag))}
+              >
+                x
+              </button>
+            </span>
           ))}
           <button
             className="btn btn-ghost btn-sm"
             style={{ padding: '2px 6px', fontSize: 11 }}
+            onClick={() => {
+              const tag = prompt('Enter tag name:');
+              if (tag && tag.trim() && !tags.includes(tag.trim())) {
+                setTags([...tags, tag.trim()]);
+              }
+            }}
           >
             <Icon name="add" size={11} />
             Add tag
@@ -308,10 +362,12 @@ function FormMode({ workflow }: { workflow: Workflow | null }) {
         <div>
           <div style={{ fontSize: 13, fontWeight: 600 }}>Steps</div>
           <div style={{ fontSize: 12, color: 'var(--dd-text-3)' }}>
-            Drag to reorder · steps run sequentially, top-to-bottom
+            {steps.length > 0
+              ? 'Drag to reorder · steps run sequentially, top-to-bottom'
+              : 'No steps yet. Add a step to define what this workflow does.'}
           </div>
         </div>
-        <button className="btn btn-secondary btn-sm">
+        <button className="btn btn-secondary btn-sm" onClick={addStep}>
           <Icon name="add" size={13} />
           Add step
         </button>
@@ -324,6 +380,8 @@ function FormMode({ workflow }: { workflow: Workflow | null }) {
             step={s}
             expanded={expanded === s.id}
             onToggle={() => setExpanded(expanded === s.id ? null : s.id)}
+            onUpdate={(patch) => updateStep(s.id, patch)}
+            onRemove={() => removeStep(s.id)}
           />
         ))}
       </div>
@@ -350,414 +408,81 @@ function FormMode({ workflow }: { workflow: Workflow | null }) {
         </button>
       </div>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr 1fr',
-          gap: 10,
-          maxWidth: 920,
-        }}
-      >
-        {params.map((p) => (
-          <div key={p.name} className="card" style={{ padding: '10px 12px' }}>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: 4,
-              }}
-            >
-              <span className="mono" style={{ fontSize: 12, color: 'var(--dd-text)' }}>
-                {p.name}
-              </span>
-              <Icon name="more_horiz" size={14} style={{ color: 'var(--dd-text-4)' }} />
+      {params.length === 0 ? (
+        <div style={{ fontSize: 12, color: 'var(--dd-text-4)', padding: '12px 0' }}>
+          No parameters defined. Add parameters to prompt for input at runtime.
+        </div>
+      ) : (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr 1fr',
+            gap: 10,
+            maxWidth: 920,
+          }}
+        >
+          {params.map((p) => (
+            <div key={p.name} className="card" style={{ padding: '10px 12px' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: 4,
+                }}
+              >
+                <span className="mono" style={{ fontSize: 12, color: 'var(--dd-text)' }}>
+                  {p.name}
+                </span>
+                <Icon name="more_horiz" size={14} style={{ color: 'var(--dd-text-4)' }} />
+              </div>
+              <div
+                style={{ display: 'flex', gap: 6, fontSize: 11, color: 'var(--dd-text-3)' }}
+              >
+                <span style={{ color: 'var(--dd-purple)' }}>{p.type}</span>
+                <span style={{ color: 'var(--dd-text-4)' }}>·</span>
+                <span className="mono">default = {p.default}</span>
+                {p.required && (
+                  <>
+                    <span style={{ color: 'var(--dd-text-4)' }}>·</span>
+                    <span style={{ color: 'var(--dd-amber)' }}>required</span>
+                  </>
+                )}
+              </div>
             </div>
-            <div
-              style={{ display: 'flex', gap: 6, fontSize: 11, color: 'var(--dd-text-3)' }}
-            >
-              <span style={{ color: 'var(--dd-purple)' }}>{p.type}</span>
-              <span style={{ color: 'var(--dd-text-4)' }}>·</span>
-              <span className="mono">default = {p.default}</span>
-              {p.required && (
-                <>
-                  <span style={{ color: 'var(--dd-text-4)' }}>·</span>
-                  <span style={{ color: 'var(--dd-amber)' }}>required</span>
-                </>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       <div style={{ height: 24 }} />
     </div>
   );
 }
 
-// ── Code lines definition ──────────────────────────────────────────────────
-
-interface CodeLine {
-  c?: string;
-  t: string;
-  s?: string;
-  k?: string;
-  tail?: string;
-  s2?: string;
-  k2?: string;
-  tail2?: string;
-  s3?: string;
-  k3?: string;
-  tail3?: string;
-}
-
-const CODE_LINES: CodeLine[] = [
-  { c: 'comment', t: '// workflows/deploy-staging.js' },
-  { c: 'comment', t: '// Builds the app, runs smoke tests, deploys to staging.' },
-  { t: '' },
-  { t: 'export default {' },
-  { t: "  name: ", s: "'Deploy to staging'", k: 'str', tail: ',' },
-  { t: "  description: ", s: "'Builds + runs smoke tests + push to staging cluster.'", k: 'str', tail: ',' },
-  { t: "  icon: ", s: "'D'", k: 'str', tail: ', color: ', s2: "'amber'", k2: 'str', tail2: ',' },
-  { t: "  tags: [", s: "'deploy'", k: 'str', tail: ', ', s2: "'staging'", k2: 'str', tail2: '],' },
-  { t: '' },
-  { t: '  params: {' },
-  { t: "    branch:     { type: ", s: "'text'", k: 'str', tail: ',   default: ', s2: "'main'", k2: 'str', tail2: ', required: ', s3: 'true', k3: 'kw', tail3: ' },' },
-  { t: "    skip_tests: { type: ", s: "'toggle'", k: 'str', tail: ', default: ', s2: 'false', k2: 'kw', tail2: ' },' },
-  { t: "    region:     { type: ", s: "'select'", k: 'str', tail: ', options: [', s2: "'us-east-1'", k2: 'str', tail2: ", 'eu-west-1', 'ap-south-1'] }," },
-  { t: '  },' },
-  { t: '' },
-  { t: '  steps: [' },
-  { t: '    {' },
-  { t: "      name: ", s: "'Verify clean git tree'", k: 'str', tail: ',' },
-  { t: "      run:  ", s: "'git status --porcelain'", k: 'str', tail: ',' },
-  { t: "      onFail: ", s: "'abort'", k: 'str', tail: ',' },
-  { t: '    },' },
-  { t: '    {' },
-  { t: "      name: ", s: "'Install dependencies'", k: 'str', tail: ',' },
-  { t: "      run:  ", s: "'npm ci --prefer-offline'", k: 'str', tail: ',' },
-  { t: "      cwd:  ", s: "'~/app'", k: 'str', tail: ', timeout: ', s2: "'5m'", k2: 'str', tail2: ',' },
-  { t: '    },' },
-  { t: '    {' },
-  { t: "      name: ", s: "'Build production bundle'", k: 'str', tail: ',' },
-  { t: "      run:  ", s: '`npm run build:${params.region}`', k: 'tpl', tail: ',' },
-  { t: "      cwd:  ", s: "'~/app'", k: 'str', tail: ', timeout: ', s2: "'5m'", k2: 'str', tail2: ',' },
-  { t: '    },' },
-  { t: '    {' },
-  { t: "      name: ", s: "'Push to staging cluster'", k: 'str', tail: ',' },
-  { t: "      run:  ", s: "'kubectl apply -f k8s/staging'", k: 'str', tail: ',' },
-  { t: "      cwd:  ", s: "'~/infra'", k: 'str', tail: ", onFail: ", s2: "'retry'", k2: 'str', tail2: ',' },
-  { t: '    },' },
-  { t: '    // …' },
-  { t: '  ],' },
-  { t: '};' },
-];
-
-const CURSOR_LINE = 27;
-
-function colorize(k?: string): string {
-  if (k === 'str') return 'var(--dd-green)';
-  if (k === 'kw') return 'var(--dd-purple)';
-  if (k === 'tpl') return 'var(--dd-cyan)';
-  return 'var(--dd-text)';
-}
-
 // ── CodeMode ───────────────────────────────────────────────────────────────
 
 function CodeMode() {
-  const outlineItems = [
-    { l: 0, name: 'name', kind: 'property' },
-    { l: 0, name: 'description', kind: 'property' },
-    { l: 0, name: 'tags[]', kind: 'array' },
-    { l: 0, name: 'params', kind: 'object' },
-    { l: 1, name: 'branch', kind: 'property' },
-    { l: 1, name: 'skip_tests', kind: 'property' },
-    { l: 1, name: 'region', kind: 'property' },
-    { l: 0, name: 'steps[]', kind: 'array' },
-    { l: 1, name: 'Verify clean git tree', kind: 'step' },
-    { l: 1, name: 'Install dependencies', kind: 'step' },
-    { l: 1, name: 'Run unit tests', kind: 'step' },
-    { l: 1, name: 'Build production bundle', kind: 'step', active: true },
-    { l: 1, name: 'Push to staging cluster', kind: 'step' },
-    { l: 1, name: 'Notify Slack channel', kind: 'step' },
-  ] as const;
-
   return (
     <div
       style={{
         flex: 1,
-        display: 'grid',
-        gridTemplateColumns: '1fr 280px',
-        overflow: 'hidden',
-        minHeight: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'column',
+        gap: 12,
+        color: 'var(--dd-text-4)',
+        padding: 40,
       }}
     >
-      {/* Editor */}
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          background: '#07070a',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Tab bar */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            background: 'var(--dd-surface)',
-            borderBottom: '1px solid var(--dd-line)',
-            fontSize: 12,
-          }}
-        >
-          <div
-            style={{
-              padding: '6px 14px',
-              background: '#07070a',
-              borderRight: '1px solid var(--dd-line)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              color: 'var(--dd-text)',
-            }}
-          >
-            <Icon name="javascript" size={14} style={{ color: 'var(--dd-amber)' }} />
-            <span className="mono">deploy-staging.js</span>
-            <span
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: 3,
-                background: 'var(--dd-text-3)',
-              }}
-            />
-          </div>
-          <span style={{ flex: 1 }} />
-          <span
-            className="mono"
-            style={{ fontSize: 11, color: 'var(--dd-text-4)', padding: '6px 12px' }}
-          >
-            JavaScript · LF · UTF-8 · spaces 2
-          </span>
-        </div>
-
-        {/* Code area */}
-        <div
-          className="mono"
-          style={{
-            flex: 1,
-            overflow: 'auto',
-            display: 'flex',
-            fontSize: 12,
-            lineHeight: '20px',
-          }}
-        >
-          {/* Gutter */}
-          <div
-            style={{
-              background: '#07070a',
-              color: 'var(--dd-text-4)',
-              padding: '12px 10px 12px 14px',
-              textAlign: 'right',
-              userSelect: 'none',
-              borderRight: '1px solid var(--dd-line)',
-              minWidth: 38,
-            }}
-          >
-            {CODE_LINES.map((_, i) => (
-              <div key={i}>{i + 1}</div>
-            ))}
-          </div>
-
-          {/* Lines */}
-          <div style={{ padding: '12px 14px', flex: 1, position: 'relative' }}>
-            {CODE_LINES.map((line, i) => (
-              <div
-                key={i}
-                style={{
-                  background: i === CURSOR_LINE ? 'rgba(96,165,250,0.06)' : 'transparent',
-                  margin: i === CURSOR_LINE ? '0 -14px' : 0,
-                  padding: i === CURSOR_LINE ? '0 14px' : 0,
-                  position: 'relative',
-                }}
-              >
-                {line.c === 'comment' ? (
-                  <span style={{ color: 'var(--dd-text-4)', fontStyle: 'italic' }}>{line.t}</span>
-                ) : (
-                  <>
-                    <span style={{ color: 'var(--dd-text)' }}>{line.t}</span>
-                    {line.s && (
-                      <span style={{ color: colorize(line.k) }}>{line.s}</span>
-                    )}
-                    {line.tail && (
-                      <span style={{ color: 'var(--dd-text)' }}>{line.tail}</span>
-                    )}
-                    {line.s2 && (
-                      <span style={{ color: colorize(line.k2) }}>{line.s2}</span>
-                    )}
-                    {line.tail2 && (
-                      <span style={{ color: 'var(--dd-text)' }}>{line.tail2}</span>
-                    )}
-                    {line.s3 && (
-                      <span style={{ color: colorize(line.k3) }}>{line.s3}</span>
-                    )}
-                    {line.tail3 && (
-                      <span style={{ color: 'var(--dd-text)' }}>{line.tail3}</span>
-                    )}
-                    {i === CURSOR_LINE && (
-                      <span
-                        className="term-cursor"
-                        style={{ background: 'var(--dd-blue)', marginLeft: 2 }}
-                      />
-                    )}
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Editor status bar */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            padding: '4px 14px',
-            borderTop: '1px solid var(--dd-line)',
-            background: 'var(--dd-surface)',
-            fontSize: 11,
-            color: 'var(--dd-text-4)',
-            fontFamily: 'var(--font-mono)',
-            gap: 16,
-          }}
-        >
-          <span>
-            <Icon
-              name="check_circle"
-              size={11}
-              style={{ color: 'var(--dd-green)', verticalAlign: '-1px', marginRight: 4 }}
-            />
-            no problems
-          </span>
-          <span>Ln 28, Col 38</span>
-          <span style={{ flex: 1 }} />
-          <span>prettier · auto-format on save</span>
-        </div>
+      <Icon name="code" size={40} style={{ color: 'var(--dd-line-2)' }} />
+      <div style={{ fontSize: 14, color: 'var(--dd-text-3)', fontWeight: 500 }}>
+        Code editing coming soon
       </div>
-
-      {/* Outline panel */}
-      <aside
-        style={{
-          borderLeft: '1px solid var(--dd-line)',
-          background: 'var(--dd-surface-2)',
-          overflow: 'auto',
-          padding: 16,
-          fontSize: 12,
-        }}
-      >
-        <div
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            color: 'var(--dd-text-3)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            marginBottom: 10,
-          }}
-        >
-          Outline
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {outlineItems.map((o, i) => (
-            <div
-              key={i}
-              style={{
-                padding: '3px 8px',
-                paddingLeft: 8 + o.l * 16,
-                borderRadius: 4,
-                fontSize: 12,
-                background: 'active' in o && o.active ? 'var(--dd-surface-3)' : 'transparent',
-                color: 'active' in o && o.active ? 'var(--dd-text)' : 'var(--dd-text-2)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                cursor: 'pointer',
-              }}
-            >
-              <Icon
-                name={
-                  o.kind === 'property'
-                    ? 'horizontal_rule'
-                    : o.kind === 'object'
-                    ? 'data_object'
-                    : o.kind === 'array'
-                    ? 'data_array'
-                    : 'play_circle'
-                }
-                size={12}
-                style={{
-                  color:
-                    o.kind === 'property'
-                      ? 'var(--dd-text-3)'
-                      : o.kind === 'step'
-                      ? 'var(--dd-blue)'
-                      : 'var(--dd-purple)',
-                }}
-              />
-              <span>{o.name}</span>
-            </div>
-          ))}
-        </div>
-
-        <div
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            color: 'var(--dd-text-3)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            margin: '20px 0 10px',
-          }}
-        >
-          Available helpers
-        </div>
-        <div
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            color: 'var(--dd-text-2)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 4,
-          }}
-        >
-          <div>
-            <span style={{ color: 'var(--dd-cyan)' }}>params</span>
-            <span style={{ color: 'var(--dd-text-4)' }}>{'.<name>'}</span>
-          </div>
-          <div>
-            <span style={{ color: 'var(--dd-cyan)' }}>env</span>
-            <span style={{ color: 'var(--dd-text-4)' }}>{'.<KEY>'}</span>
-          </div>
-          <div>
-            <span style={{ color: 'var(--dd-purple)' }}>shell</span>
-            <span style={{ color: 'var(--dd-text-4)' }}>(cmd, opts?)</span>
-          </div>
-          <div>
-            <span style={{ color: 'var(--dd-purple)' }}>http</span>
-            <span style={{ color: 'var(--dd-text-4)' }}>(method, url, body?)</span>
-          </div>
-          <div>
-            <span style={{ color: 'var(--dd-purple)' }}>log</span>
-            <span style={{ color: 'var(--dd-text-4)' }}>(level, msg)</span>
-          </div>
-          <div>
-            <span style={{ color: 'var(--dd-purple)' }}>prompt</span>
-            <span style={{ color: 'var(--dd-text-4)' }}>(question)</span>
-          </div>
-        </div>
-      </aside>
+      <div style={{ fontSize: 12, color: 'var(--dd-text-4)', textAlign: 'center', maxWidth: 320 }}>
+        Use <strong>Form</strong> mode to edit workflow steps, parameters, and metadata.
+        Code mode will support direct YAML/JS editing in a future release.
+      </div>
     </div>
   );
 }
@@ -778,7 +503,15 @@ export default function WorkflowEditor() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<'form' | 'code'>('form');
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
-  const [unsaved] = useState(true);
+  const [unsaved, setUnsaved] = useState(false);
+
+  const formStateRef = useRef({
+    name: '',
+    description: '',
+    icon: 'W',
+    tags: [] as string[],
+    steps: [] as LocalStep[],
+  });
 
   const { workflows } = useWorkflows();
   const { processes } = useProcesses();
@@ -935,16 +668,27 @@ export default function WorkflowEditor() {
                 <button
                   className="btn btn-primary"
                   onClick={() => {
-                    if (workflow) {
-                      saveWorkflow(workflow.id, {
-                        name: workflow.name,
-                        steps: workflow.steps,
-                        description: workflow.description,
-                        icon: workflow.icon,
-                        tags: workflow.tags,
-                        params: workflow.params,
-                      }).catch(console.error);
-                    }
+                    const fs = formStateRef.current;
+                    const wfId = workflow?.id ?? id ?? 'new';
+                    // Convert LocalStep[] back to WorkflowStep[]
+                    const stepsPayload = fs.steps.map((s) => ({
+                      name: s.name,
+                      command: s.cmd,
+                      workdir: s.wd || undefined,
+                      type: 'run-and-done' as const,
+                      timeout: parseInt(s.timeout) || 30,
+                      on_failure: s.onFail === 'retry' ? ('retry:3' as const) : s.onFail === 'continue' ? ('continue' as const) : ('stop' as const),
+                    }));
+                    saveWorkflow(wfId, {
+                      name: fs.name,
+                      steps: stepsPayload,
+                      description: fs.description || undefined,
+                      icon: fs.icon || undefined,
+                      tags: fs.tags.length > 0 ? fs.tags : undefined,
+                      params: workflow?.params,
+                    }).then(() => {
+                      setUnsaved(false);
+                    }).catch(console.error);
                     navigate(-1);
                   }}
                 >
@@ -959,7 +703,7 @@ export default function WorkflowEditor() {
           </div>
 
           {/* Mode content */}
-          {mode === 'form' ? <FormMode workflow={workflow} /> : <CodeMode />}
+          {mode === 'form' ? <FormMode workflow={workflow} formStateRef={formStateRef} /> : <CodeMode />}
         </main>
 
         <StatusBar processCount={processes.length} activeRuns={activeRuns} />
