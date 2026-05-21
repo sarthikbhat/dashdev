@@ -10,11 +10,13 @@ import { Server as SocketIOServer } from "socket.io";
 import { Database } from "./core/db.js";
 import { ProcessManager } from "./core/process-manager.js";
 import { WorkflowRunner } from "./core/workflow-runner.js";
+import { ServiceMonitor } from "./core/service-monitor.js";
 import { loadAllYamlWorkflows } from "./core/yaml-loader.js";
 import { loadAllJsWorkflows } from "./core/js-loader.js";
 import { workflowsRouter } from "./api/workflows.js";
 import { runsRouter } from "./api/runs.js";
 import { processesRouter } from "./api/processes.js";
+import { servicesRouter } from "./api/services.js";
 import type { ServerToClientEvents, ClientToServerEvents } from "./core/types.js";
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -118,6 +120,14 @@ const io = new SocketIOServer<ClientToServerEvents, ServerToClientEvents>(server
   cors: { origin: "*" },
 });
 
+const monitor = new ServiceMonitor(
+  () => db.listServices(),
+  (statuses) => io.emit("service:status", statuses)
+);
+
+// Mount services router now that monitor is available
+app.use("/api/services", servicesRouter(db, monitor, pm));
+
 // Wire runner callbacks → socket.io broadcast
 runner.onRunStatus = (data) => {
   io.emit("run:status", data);
@@ -140,6 +150,11 @@ io.on("connection", (socket) => {
   socket.on("process:kill", ({ id }) => {
     pm.kill(id);
   });
+
+  socket.on("service:subscribe-logs", ({ service_id }) => {
+    // Implementation can be added later — just log for now
+    console.log(`Client subscribed to logs for service ${service_id}`);
+  });
 });
 
 // ── Watch workflows dir ───────────────────────────────────────────────────────
@@ -160,6 +175,7 @@ fs.watch(WORKFLOWS_DIR, () => {
 
 function shutdown(): void {
   console.log("\n[devdash] Shutting down...");
+  monitor.stop();
   pm.killAll();
   db.close();
   process.exit(0);
@@ -178,6 +194,8 @@ process.on("uncaughtException", (err) => {
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 await syncWorkflows();
+
+monitor.start(5000);
 
 server.listen(PORT, () => {
   console.log(`DevDash running at http://localhost:${PORT}`);
