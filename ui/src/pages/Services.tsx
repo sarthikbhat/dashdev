@@ -747,11 +747,9 @@ function GroupCard({ group, services, onStartAll, onStopAll, onDelete }: GroupCa
 
 interface EmptyStateProps {
   onAddService: () => void;
-  onImport: () => void;
-  importStatus: string | null;
 }
 
-function EmptyState({ onAddService, onImport, importStatus }: EmptyStateProps) {
+function EmptyState({ onAddService }: EmptyStateProps) {
   return (
     <div
       style={{
@@ -769,46 +767,10 @@ function EmptyState({ onAddService, onImport, importStatus }: EmptyStateProps) {
           No services configured
         </div>
         <div style={{ fontSize: 12, color: 'var(--dd-text-4)', maxWidth: 320 }}>
-          Add services manually or import your existing backendctl configuration.
+          Add services to monitor their health and manage them from here.
         </div>
       </div>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
-        {/* Import card */}
-        <button
-          onClick={onImport}
-          disabled={importStatus === 'importing...'}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 8,
-            padding: '18px 24px',
-            borderRadius: 10,
-            border: '1px solid var(--dd-line-2)',
-            background: 'var(--dd-surface-3)',
-            cursor: importStatus === 'importing...' ? 'not-allowed' : 'pointer',
-            color: 'var(--dd-text-2)',
-            width: 160,
-            transition: 'border-color 100ms ease, background 100ms ease',
-            fontFamily: 'inherit',
-            opacity: importStatus === 'importing...' ? 0.6 : 1,
-          }}
-          onMouseEnter={(e) => {
-            if (importStatus !== 'importing...')
-              e.currentTarget.style.borderColor = 'var(--dd-blue)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = 'var(--dd-line-2)';
-          }}
-        >
-          <Icon name="download" size={24} style={{ color: 'var(--dd-blue)' }} />
-          <div style={{ fontSize: 12, fontWeight: 600 }}>
-            {importStatus === 'importing...' ? 'Importing...' : 'Import from backendctl'}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--dd-text-4)', textAlign: 'center' }}>
-            Already have a backendctl setup?
-          </div>
-        </button>
         {/* Add manually card */}
         <button
           onClick={onAddService}
@@ -841,19 +803,6 @@ function EmptyState({ onAddService, onImport, importStatus }: EmptyStateProps) {
           </div>
         </button>
       </div>
-      {importStatus && importStatus !== 'importing...' && (
-        <span
-          style={{
-            fontSize: 11,
-            color: importStatus.startsWith('Import failed')
-              ? 'var(--dd-red)'
-              : 'var(--dd-green)',
-            fontFamily: 'var(--font-mono)',
-          }}
-        >
-          {importStatus}
-        </span>
-      )}
     </div>
   );
 }
@@ -1359,7 +1308,6 @@ export default function Services() {
   const [showAddService, setShowAddService] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
-  const [importStatus, setImportStatus] = useState<string | null>(null);
 
   // Filter services by active group
   const filteredServices =
@@ -1451,22 +1399,6 @@ export default function Services() {
     }
   }
 
-  async function handleImport() {
-    setImportStatus('importing...');
-    try {
-      const result = await api.importBackendctl(
-        '~/Desktop/code/tm/backend/backendctl'
-      );
-      setImportStatus(`Imported ${result.imported} service(s)`);
-      await refreshServices();
-      setTimeout(() => setImportStatus(null), 3000);
-    } catch (e) {
-      setImportStatus(
-        `Import failed: ${e instanceof Error ? e.message : 'unknown error'}`
-      );
-      setTimeout(() => setImportStatus(null), 4000);
-    }
-  }
 
   function handleSelectService(id: string) {
     setSelectedServiceId(id);
@@ -1591,8 +1523,6 @@ export default function Services() {
                 {services.length === 0 ? (
                   <EmptyState
                     onAddService={() => setShowAddService(true)}
-                    onImport={handleImport}
-                    importStatus={importStatus}
                   />
                 ) : filteredServices.length === 0 ? (
                   <div
