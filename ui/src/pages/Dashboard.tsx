@@ -83,17 +83,22 @@ export default function Dashboard() {
 
   // After triggering a run, poll for the new run ID
   async function pollForRunId(wfId: string) {
-    // API returns 202 without run_id; wait then fetch newest running run
-    await new Promise((r) => setTimeout(r, 500));
-    try {
-      const recentRuns = await listRuns(wfId);
-      const newest = recentRuns.find((r) => r.status === 'running');
-      if (newest) {
-        setActiveRunId(newest.id);
+    // API returns 202 without run_id; poll until we find the newest run
+    for (let attempt = 0; attempt < 10; attempt++) {
+      await new Promise((r) => setTimeout(r, 400));
+      try {
+        const recentRuns = await listRuns(wfId);
+        // Pick the most recent run (any status — it may already be done)
+        if (recentRuns.length > 0) {
+          setActiveRunId(recentRuns[0].id);
+          return;
+        }
+      } catch (e) {
+        console.error('Failed to poll for run ID:', e);
       }
-    } catch (e) {
-      console.error('Failed to poll for run ID:', e);
     }
+    // If we still can't find it, stop the spinner
+    setRunLaunching(false);
   }
 
   function launchRun(wfId: string, params?: Record<string, string>) {
