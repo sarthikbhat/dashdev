@@ -57,6 +57,7 @@ export default function Dashboard() {
   // ParamModal + RunView state
   const [showParamModal, setShowParamModal] = useState(false);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [runLaunching, setRunLaunching] = useState(false);
 
   // Sidebar entries
   const sidebarWorkflows = workflows.map((wf, i) => ({
@@ -95,25 +96,26 @@ export default function Dashboard() {
     }
   }
 
+  function launchRun(wfId: string, params?: Record<string, string>) {
+    setRunLaunching(true);
+    triggerRun(wfId, params)
+      .then(() => pollForRunId(wfId))
+      .catch(console.error);
+  }
+
   function handleRun() {
     if (!selectedWorkflow) return;
-    // If workflow has params, show the ParamModal first
     if (selectedWorkflow.params && selectedWorkflow.params.length > 0) {
       setShowParamModal(true);
     } else {
-      // No params — trigger directly
-      triggerRun(selectedWorkflow.id)
-        .then(() => pollForRunId(selectedWorkflow.id))
-        .catch(console.error);
+      launchRun(selectedWorkflow.id);
     }
   }
 
   function handleParamRun(values: Record<string, string>) {
     if (!selectedWorkflow) return;
     setShowParamModal(false);
-    triggerRun(selectedWorkflow.id, values)
-      .then(() => pollForRunId(selectedWorkflow.id))
-      .catch(console.error);
+    launchRun(selectedWorkflow.id, values);
   }
 
   function handleParamCancel() {
@@ -122,10 +124,12 @@ export default function Dashboard() {
 
   function handleRunBack() {
     setActiveRunId(null);
+    setRunLaunching(false);
   }
 
   function handleRunCancel() {
     setActiveRunId(null);
+    setRunLaunching(false);
   }
 
   // Show EmptyState welcome screen when workflows have loaded and none exist
@@ -154,6 +158,24 @@ export default function Dashboard() {
         onRun={handleParamRun}
         onCancel={handleParamCancel}
       />
+    );
+  }
+
+  // Show launching state immediately while polling for run ID
+  if (runLaunching && !activeRunId && selectedWorkflow) {
+    return (
+      <div className="dd" style={{ width: '100%', height: '100%' }}>
+        <div className="app-window">
+          <Titlebar path={`${selectedWorkflow.name} · launching...`} />
+          <Sidebar workflows={sidebarWorkflows} activeId={workflowId} onSelect={handleSelect} onCreate={handleCreate} />
+          <main className="main" style={{ gridArea: 'main', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+            <div className="spinner" style={{ width: 24, height: 24, borderWidth: 2 }} />
+            <div style={{ fontSize: 14, color: 'var(--dd-text-2)' }}>Launching workflow...</div>
+            <div style={{ fontSize: 12, color: 'var(--dd-text-4)' }}>Waiting for run to start</div>
+          </main>
+          <StatusBar processCount={processes.length} activeRuns={activeRuns} />
+        </div>
+      </div>
     );
   }
 

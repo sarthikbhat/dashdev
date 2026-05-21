@@ -1,0 +1,785 @@
+/* ==========================================================================
+   DesignStack — Colors & Type
+   Source of truth: design-stack/tailwind.config.js + _default-theme.scss
+   (BrowserStack Design System tokens).
+   ========================================================================== */
+
+/* ---------- Inter (main UI typeface) — local variable font -----------------
+   Brand-matched: Inter variable (opsz + wght axes). JetBrains Mono still
+   pulled via CDN as a Fira Code stand-in.
+   ------------------------------------------------------------------------- */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./fonts/Inter-VariableFont_opsz_wght.ttf') format('truetype-variations'),
+       url('./fonts/Inter-VariableFont_opsz_wght.ttf') format('truetype');
+  font-variation-settings: 'opsz' 14;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./fonts/Inter-Italic-VariableFont_opsz_wght.ttf') format('truetype-variations'),
+       url('./fonts/Inter-Italic-VariableFont_opsz_wght.ttf') format('truetype');
+  font-variation-settings: 'opsz' 14;
+}
+@font-face {
+  font-family: 'Fira Code';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url('./fonts/FiraCode-VariableFont_wght.ttf') format('truetype-variations'),
+       url('./fonts/FiraCode-VariableFont_wght.ttf') format('truetype');
+}
+
+:root {
+  /* ====================================================================
+     PALETTE — raw scales (tailwind: gray/blue/red/green/yellow/sky)
+     ==================================================================== */
+  --colors-white: #ffffff;
+  --colors-black: #000000;
+
+  /* base (gray) */
+  --colors-base-50:  #f9fafb;
+  --colors-base-100: #f3f4f6;
+  --colors-base-200: #e5e7eb;
+  --colors-base-300: #d1d5db;
+  --colors-base-400: #9ca3af;
+  --colors-base-500: #6b7280;
+  --colors-base-600: #4b5563;
+  --colors-base-700: #374151;
+  --colors-base-800: #1f2937;
+  --colors-base-900: #111827;
+
+  /* brand (blue) — BrowserStack primary */
+  --colors-brand-50:  #eff6ff;
+  --colors-brand-100: #dbeafe;
+  --colors-brand-200: #bfdbfe;
+  --colors-brand-300: #93c5fd;
+  --colors-brand-400: #60a5fa;
+  --colors-brand-500: #3b82f6;
+  --colors-brand-600: #2563eb;  /* PRIMARY BRAND */
+  --colors-brand-700: #1d4ed8;
+  --colors-brand-800: #1e40af;
+  --colors-brand-900: #1e3a8a;
+
+  /* danger (red) */
+  --colors-danger-50:  #fef2f2;
+  --colors-danger-100: #fee2e2;
+  --colors-danger-200: #fecaca;
+  --colors-danger-300: #fca5a5;
+  --colors-danger-400: #f87171;
+  --colors-danger-500: #ef4444;
+  --colors-danger-600: #dc2626;
+  --colors-danger-700: #b91c1c;
+  --colors-danger-800: #991b1b;
+  --colors-danger-900: #7f1d1d;
+
+  /* success (green) */
+  --colors-success-50:  #ecfdf5;
+  --colors-success-100: #d1fae5;
+  --colors-success-200: #a7f3d0;
+  --colors-success-300: #6ee7b7;
+  --colors-success-400: #34d399;
+  --colors-success-500: #10b981;
+  --colors-success-600: #059669;
+  --colors-success-700: #047857;
+  --colors-success-800: #065f46;
+  --colors-success-900: #064e3b;
+
+  /* attention (yellow/amber) */
+  --colors-attention-50:  #fffbeb;
+  --colors-attention-100: #fef3c7;
+  --colors-attention-200: #fde68a;
+  --colors-attention-300: #fcd34d;
+  --colors-attention-400: #fbbf24;
+  --colors-attention-500: #f59e0b;
+  --colors-attention-600: #d97706;
+  --colors-attention-700: #b45309;
+  --colors-attention-800: #92400e;
+  --colors-attention-900: #78350f;
+
+  /* info (sky) */
+  --colors-info-50:  #f0f9ff;
+  --colors-info-100: #e0f2fe;
+  --colors-info-200: #bae6fd;
+  --colors-info-300: #7dd3fc;
+  --colors-info-400: #38bdf8;
+  --colors-info-500: #0ea5e9;
+  --colors-info-600: #0284c7;
+  --colors-info-700: #0369a1;
+  --colors-info-800: #075985;
+  --colors-info-900: #0c4a6e;
+
+  /* pink — used sparingly (AI error states, Percy brand accents) */
+  --colors-pink-100: #fce7f3;
+  --colors-pink-300: #f9a8d4;
+  --colors-pink-700: #be185d;
+  --colors-pink-800: #9d174d;
+  --colors-pink-950: #500724;
+
+  /* sky (non-semantic handles used in a few charts / icons) */
+  --colors-sky-400: #38bdf8;
+  --colors-sky-600: #0284c7;
+
+  /* ====================================================================
+     SEMANTIC TOKENS — Background
+     weak = lightest tint, default = main, stronger = darkest usable
+     Every token below is verbatim from tailwind-config/_default-theme.scss
+     ==================================================================== */
+  --bg-neutral-default:     var(--colors-white);
+  --bg-neutral-strong:      var(--colors-base-50);
+  --bg-neutral-stronger:    var(--colors-base-100);
+  --bg-neutral-strongest:   var(--colors-base-200);
+  --bg-neutral-inverse-weakest: var(--colors-base-500);
+  --bg-neutral-inverse-weaker:  var(--colors-base-600);
+  --bg-neutral-inverse-weak:    var(--colors-base-800);
+  --bg-neutral-inverse-default: var(--colors-base-900);
+  --bg-neutral-default-hover:     var(--colors-base-50);
+  --bg-neutral-default-disabled:  var(--colors-base-50);
+  --bg-neutral-stronger-hover:    var(--colors-base-200);
+  --bg-neutral-stronger-disabled: var(--colors-base-200);
+  --bg-neutral-strongest-hover:   var(--colors-base-200);
+  --bg-neutral-strongest-disabled:var(--colors-base-100);
+  --bg-neutral-strong-hover:      var(--colors-base-100);
+  --bg-neutral-inverse-weaker-hover: var(--colors-base-700);
+
+  --bg-brand-weakest:  var(--colors-brand-50);
+  --bg-brand-weaker:   var(--colors-brand-100);
+  --bg-brand-weak:     var(--colors-brand-300);
+  --bg-brand-default:  var(--colors-brand-600);
+  --bg-brand-stronger: var(--colors-brand-800);
+  --bg-brand-default-hover:    var(--colors-brand-700);
+  --bg-brand-default-disabled: var(--colors-brand-300);
+  --bg-brand-weaker-hover:     var(--colors-brand-200);
+  --bg-brand-weaker-disabled:  var(--colors-brand-50);
+  --bg-brand-weakest-hover:    var(--colors-brand-100);
+
+  --bg-danger-weakest:  var(--colors-danger-50);
+  --bg-danger-weaker:   var(--colors-danger-100);
+  --bg-danger-default:  var(--colors-danger-600);
+  --bg-danger-stronger: var(--colors-danger-800);
+  --bg-danger-default-hover:    var(--colors-danger-700);
+  --bg-danger-default-disabled: var(--colors-danger-500);
+  --bg-danger-weaker-hover:     var(--colors-danger-200);
+  --bg-danger-weaker-disabled:  var(--colors-danger-50);
+  --bg-danger-weakest-hover:    var(--colors-danger-100);
+
+  --bg-success-weakest:  var(--colors-success-50);
+  --bg-success-weaker:   var(--colors-success-100);
+  --bg-success-default:  var(--colors-success-600);
+  --bg-success-strong:   var(--colors-success-700);
+  --bg-success-stronger: var(--colors-success-800);
+  --bg-success-default-hover:    var(--colors-success-700);
+  --bg-success-default-disabled: var(--colors-success-500);
+  --bg-success-strong-hover:     var(--colors-success-800);
+  --bg-success-strong-disabled:  var(--colors-success-500);
+  --bg-success-weaker-hover:     var(--colors-success-200);
+  --bg-success-weaker-disabled:  var(--colors-success-50);
+  --bg-success-weakest-hover:    var(--colors-success-100);
+
+  --bg-attention-weakest:  var(--colors-attention-50);
+  --bg-attention-weaker:   var(--colors-attention-100);
+  --bg-attention-weak:     var(--colors-attention-300);
+  --bg-attention-default:  var(--colors-attention-600);
+  --bg-attention-stronger: var(--colors-attention-800);
+  --bg-attention-weak-hover:     var(--colors-attention-400);
+  --bg-attention-weak-disabled:  var(--colors-attention-200);
+  --bg-attention-weaker-hover:   var(--colors-attention-200);
+  --bg-attention-weaker-disabled:var(--colors-attention-50);
+  --bg-attention-weakest-hover:  var(--colors-attention-100);
+
+  --bg-input-default:         var(--colors-white);
+  --bg-input-default-hover:   var(--colors-base-50);
+  --bg-input-default-disabled:var(--colors-base-50);
+  --bg-raised-default:        var(--colors-white);
+  --bg-raised-default-hover:  var(--colors-base-50);
+  --surface-default: var(--colors-white);
+  --surface-strong:  var(--colors-base-50);
+
+  /* ====================================================================
+     SEMANTIC TOKENS — Text
+     ==================================================================== */
+  --text-ai: #1F2937;
+  --text-neutral-weakest: var(--colors-base-400);
+  --text-neutral-weaker:  var(--colors-base-500);
+  --text-neutral-weak:    var(--colors-base-700);
+  --text-neutral-default: var(--colors-base-900);
+  --text-neutral-inverse-default:  var(--colors-white);
+  --text-neutral-inverse-weak:     var(--colors-base-50);
+  --text-neutral-inverse-weakest:  var(--colors-base-300);
+
+  --text-brand-weaker:   var(--colors-brand-100);
+  --text-brand-weak:     var(--colors-brand-300);
+  --text-brand-default:  var(--colors-brand-600);
+  --text-brand-strong:   var(--colors-brand-700);
+  --text-brand-stronger: var(--colors-brand-800);
+  --text-brand-strongest:var(--colors-brand-900);
+
+  --text-danger-weaker:    var(--colors-danger-200);
+  --text-danger-weak:      var(--colors-danger-300);
+  --text-danger-default:   var(--colors-danger-600);
+  --text-danger-strong:    var(--colors-danger-700);
+  --text-danger-stronger:  var(--colors-danger-800);
+  --text-danger-strongest: var(--colors-danger-900);
+
+  --text-success-weaker:   var(--colors-success-200);
+  --text-success-weak:     var(--colors-success-300);
+  --text-success-default:  var(--colors-success-700);
+  --text-success-strong:   var(--colors-success-800);
+  --text-success-stronger: var(--colors-success-900);
+
+  --text-attention-weaker:   var(--colors-attention-400);
+  --text-attention-weak:     var(--colors-attention-500);
+  --text-attention-default:  var(--colors-attention-700);
+  --text-attention-strong:   var(--colors-attention-800);
+  --text-attention-stronger: var(--colors-attention-900);
+  --text-attention-inverse-default: var(--colors-attention-900);
+
+  /* Info (text-info-default is brand-600 per tw config) */
+  --text-info-default: var(--colors-brand-600);
+
+  /* ====================================================================
+     SEMANTIC TOKENS — Icon
+     ==================================================================== */
+  --icon-neutral-weakest: var(--colors-base-200);
+  --icon-neutral-weaker:  var(--colors-base-400);
+  --icon-neutral-weak:    var(--colors-base-500);
+  --icon-neutral-default: var(--colors-base-600);
+  --icon-neutral-strong:  var(--colors-base-700);
+  --icon-neutral-strongest: var(--colors-base-900);
+  --icon-neutral-inverse-default: var(--colors-white);
+  --icon-neutral-inverse-weaker:  var(--colors-base-200);
+
+  --icon-brand-weakest: var(--colors-brand-200);
+  --icon-brand-weaker:  var(--colors-brand-400);
+  --icon-brand-weak:    var(--colors-brand-500);
+  --icon-brand-default: var(--colors-brand-600);
+  --icon-brand-strong:  var(--colors-brand-700);
+  --icon-brand-stronger:var(--colors-brand-800);
+
+  --icon-danger-weakest: var(--colors-danger-200);
+  --icon-danger-weaker:  var(--colors-danger-400);
+  --icon-danger-weak:    var(--colors-danger-500);
+  --icon-danger-default: var(--colors-danger-600);
+  --icon-danger-strong:  var(--colors-danger-700);
+  --icon-danger-stronger:var(--colors-danger-800);
+
+  --icon-success-weakest: var(--colors-success-200);
+  --icon-success-weaker:  var(--colors-success-400);
+  --icon-success-weak:    var(--colors-success-500);
+  --icon-success-default: var(--colors-success-600);
+  --icon-success-strong:  var(--colors-success-700);
+  --icon-success-stronger:var(--colors-success-800);
+
+  --icon-attention-weaker:   var(--colors-attention-400);
+  --icon-attention-weak:     var(--colors-attention-500);
+  --icon-attention-default:  var(--colors-attention-600);
+  --icon-attention-strong:   var(--colors-attention-700);
+  --icon-attention-stronger: var(--colors-attention-800);
+  --icon-attention-strongest:var(--colors-attention-900);
+  --icon-attention-inverse-default: var(--colors-attention-900);
+
+  /* ====================================================================
+     SEMANTIC TOKENS — Border
+     ==================================================================== */
+  --border-neutral-weak:     var(--colors-base-100);
+  --border-neutral-default:  var(--colors-base-200);
+  --border-neutral-strong:   var(--colors-base-300);
+  --border-neutral-stronger: var(--colors-base-500);
+  --border-neutral-strongest:var(--colors-base-700);
+  --border-neutral-inverse-default: var(--colors-white);
+
+  --border-brand-weaker:   var(--colors-brand-200);
+  --border-brand-weak:     var(--colors-brand-300);
+  --border-brand-default:  var(--colors-brand-400);
+  --border-brand-strong:   var(--colors-brand-500);
+  --border-brand-stronger: var(--colors-brand-600);
+  --border-brand-strongest:var(--colors-brand-700);
+
+  --border-danger-weak:     var(--colors-danger-300);
+  --border-danger-default:  var(--colors-danger-400);
+  --border-danger-strong:   var(--colors-danger-500);
+  --border-danger-stronger: var(--colors-danger-600);
+
+  --border-success-default:  var(--colors-success-400);
+  --border-success-stronger: var(--colors-success-600);
+
+  --border-attention-default:  var(--colors-attention-400);
+  --border-attention-stronger: var(--colors-attention-600);
+
+  /* ====================================================================
+     CHART CATEGORICAL
+     12-color sequence for charts; paired with accessible variants
+     ==================================================================== */
+  --chart-category-1:  #2563EB;
+  --chart-category-2:  #19A699;
+  --chart-category-3:  #807EF2;
+  --chart-category-4:  #DD7529;
+  --chart-category-5:  #DB6380;
+  --chart-category-6:  #339AE3;
+  --chart-category-7:  #959595;
+  --chart-category-8:  #148BAF;
+  --chart-category-9:  #26A96A;
+  --chart-category-10: #C48600;
+  --chart-category-11: #C772DC;
+  --chart-category-12: #E54921;
+  --chart-danger:    #E54921;
+  --chart-success:   #26A96A;
+  --chart-attention: #C48600;
+  --chart-neutral:   #959595;
+
+  /* ====================================================================
+     AI GRADIENT — BrowserStack's signature 4-stop gradient for AI surfaces
+     (blue → purple → pink → coral). Use on AI features only.
+
+     Variants:
+       .ai-gradient-default       - subtle 8% tint fill, gradient border
+       .ai-gradient-strong        - 16% tint fill, gradient border
+       .ai-gradient-default-hover - 10% tint, reversed gradient direction
+       .ai-gradient-strong-hover  - 20% tint, reversed gradient direction
+     ==================================================================== */
+  /* Base stop colors */
+  --ai-blue:   #339AE3;
+  --ai-purple: #807EF2;
+  --ai-pink:   #DB6380;
+  --ai-coral:  #DD7529;
+
+  /* Flat stops @ 8% alpha — for soft chips, pills */
+  --ai-gradient-blue:   #339AE315;
+  --ai-gradient-purple: #807EF215;
+  --ai-gradient-pink:   #DB638015;
+  --ai-gradient-coral:  #DD752915;
+
+  /* Flat stops @ 20% alpha — for stronger chips */
+  --ai-gradient-cyan:     #339AE333;
+  --ai-gradient-lavender: #807EF233;
+  --ai-gradient-crimson:  #DB638033;
+  --ai-gradient-orange:   #FDA4AF33;
+
+  /* Linear bg stops — 8% intensity blended on white */
+  --ai-gradient-linear-bg-blue:   #eff7fd;
+  --ai-gradient-linear-bg-purple: #f6f5fe;
+  --ai-gradient-linear-bg-pink:   #fcf3f5;
+  --ai-gradient-linear-bg-coral:  #fcf4ee;
+
+  /* Linear bg hover stops — 10% intensity */
+  --ai-gradient-linear-bg-hover-blue:   #e9f4fc;
+  --ai-gradient-linear-bg-hover-purple: #f3f1fe;
+  --ai-gradient-linear-bg-hover-pink:   #fbeef1;
+  --ai-gradient-linear-bg-hover-coral:  #fbf0e7;
+
+  /* Linear border stops — 100% intensity */
+  --ai-gradient-linear-border-blue:   #339ae3;
+  --ai-gradient-linear-border-purple: #907ef2;
+  --ai-gradient-linear-border-pink:   #db6380;
+  --ai-gradient-linear-border-coral:  #dd7529;
+
+  /* Strong linear bg stops — 16% intensity on white */
+  --ai-gradient-strong-linear-bg-blue:   #DEEFFB;
+  --ai-gradient-strong-linear-bg-purple: #EBEAFD;
+  --ai-gradient-strong-linear-bg-pink:   #F9E6EB;
+  --ai-gradient-strong-linear-bg-coral:  #FAE9DD;
+
+  /* Strong linear bg hover stops — 20% intensity */
+  --ai-gradient-strong-linear-bg-hover-blue:   #D6EBF9;
+  --ai-gradient-strong-linear-bg-hover-purple: #E6E5FC;
+  --ai-gradient-strong-linear-bg-hover-pink:   #F8E0E6;
+  --ai-gradient-strong-linear-bg-hover-coral:  #F8E3D4;
+
+  /* Strong linear border stops — 100% intensity */
+  --ai-gradient-strong-linear-border-blue:   #339AE3;
+  --ai-gradient-strong-linear-border-purple: #807EF2;
+  --ai-gradient-strong-linear-border-pink:   #DB6380;
+  --ai-gradient-strong-linear-border-coral:  #DD7529;
+
+  /* Ready-to-use shorthand gradients */
+  --ai-gradient-linear: linear-gradient(90deg,
+    var(--ai-gradient-linear-bg-blue),
+    var(--ai-gradient-linear-bg-purple),
+    var(--ai-gradient-linear-bg-pink),
+    var(--ai-gradient-linear-bg-coral));
+  --ai-gradient-strong: linear-gradient(90deg,
+    var(--ai-gradient-strong-linear-bg-blue),
+    var(--ai-gradient-strong-linear-bg-purple),
+    var(--ai-gradient-strong-linear-bg-pink),
+    var(--ai-gradient-strong-linear-bg-coral));
+  --ai-gradient-border: linear-gradient(90deg,
+    var(--ai-gradient-linear-border-blue),
+    var(--ai-gradient-linear-border-purple),
+    var(--ai-gradient-linear-border-pink),
+    var(--ai-gradient-linear-border-coral));
+
+  /* ====================================================================
+     RADII
+     ==================================================================== */
+  --radius-none: 0;
+  --radius-sm:   2px;
+  --radius:     4px;   /* default small */
+  --radius-md:  6px;   /* buttons default */
+  --radius-lg:  8px;
+  --radius-xl: 12px;
+  --radius-2xl:16px;
+  --radius-full: 9999px;
+
+  /* ====================================================================
+     SHADOW / ELEVATION
+     Derived from tailwind default shadow scale.
+     ==================================================================== */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow:    0 1px 3px 0 rgb(0 0 0 / 0.10), 0 1px 2px -1px rgb(0 0 0 / 0.10);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.10), 0 2px 4px -2px rgb(0 0 0 / 0.10);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.10), 0 4px 6px -4px rgb(0 0 0 / 0.10);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.10), 0 8px 10px -6px rgb(0 0 0 / 0.10);
+  --shadow-focus-ring: 0 0 0 2px var(--colors-white), 0 0 0 4px var(--colors-brand-700);
+
+  /* ====================================================================
+     SPACING — 4-px grid; Tailwind-aligned
+     ==================================================================== */
+  --space-0: 0;
+  --space-0_5: 2px;
+  --space-1: 4px;
+  --space-1_5: 6px;
+  --space-2: 8px;
+  --space-2_5: 10px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  /* ====================================================================
+     TYPOGRAPHY
+     Stack: Inter (UI), JetBrains Mono (code fallback for Fira/Roboto Mono)
+     ==================================================================== */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI',
+               Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'Fira Code', ui-monospace, 'Roboto Mono',
+               Menlo, Monaco, Consolas, monospace;
+
+  /* Tailwind text-scale (w/ leading) — what the DS actually uses */
+  --text-2xs:  11px; --leading-2xs: 16px;
+  --text-xs:   12px; --leading-xs:  16px;
+  --text-sm:   14px; --leading-sm:  20px;
+  --text-base: 16px; --leading-base: 24px;
+  --text-lg:   18px; --leading-lg:  28px;
+  --text-xl:   20px; --leading-xl:  28px;
+  --text-2xl:  24px; --leading-2xl: 32px;
+  --text-3xl:  30px; --leading-3xl: 36px;
+  --text-4xl:  36px; --leading-4xl: 40px;
+  --text-5xl:  48px; --leading-5xl: 1;
+  --text-6xl:  60px; --leading-6xl: 1;
+
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  /* ====================================================================
+     Z-INDEX — design-stack layer order
+     Use z-tokens, not arbitrary values, so surfaces stack predictably.
+     ==================================================================== */
+  --z-0:   0;
+  --z-10:  10;   /* raised inline surfaces */
+  --z-20:  20;   /* sticky subheaders */
+  --z-30:  30;   /* app navbar */
+  --z-40:  40;   /* app sidebar */
+  --z-50:  50;   /* dropdown triggers */
+  --z-60:  60;
+  --z-70:  70;
+  --z-80:  80;
+  --z-90:  90;
+  --z-95:  95;   /* sticky scroll shadow */
+  --z-96:  96;
+  --z-97:  97;
+  --z-98:  98;
+  --z-99:  99;
+  --z-100: 100;  /* dropdown menus, listbox options */
+  --z-200: 200;  /* popovers, comboboxes */
+  --z-300: 300;  /* tooltips */
+  --z-400: 400;  /* slideovers, sheets */
+  --z-500: 500;  /* modals */
+  --z-600: 600;  /* banner / announcement bar */
+  --z-700: 700;  /* toast notifications */
+
+  /* ====================================================================
+     MOTION
+     ==================================================================== */
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in:  cubic-bezier(0.4, 0, 1, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.41, 0.73, 0.51, 1.02); /* DS "slide-in" */
+  --duration-fast: 150ms;
+  --duration: 200ms;
+  --duration-slow: 300ms;
+}
+
+/* ==========================================================================
+   AI gradient utility classes — mirror design-stack plugin
+   ========================================================================== */
+.ai-gradient-default {
+  background:
+    linear-gradient(90deg,
+      var(--ai-gradient-linear-bg-blue),
+      var(--ai-gradient-linear-bg-purple),
+      var(--ai-gradient-linear-bg-pink),
+      var(--ai-gradient-linear-bg-coral)) padding-box,
+    linear-gradient(to right,
+      var(--ai-gradient-linear-border-blue),
+      var(--ai-gradient-linear-border-purple),
+      var(--ai-gradient-linear-border-pink),
+      var(--ai-gradient-linear-border-coral)) border-box;
+  border: 1px solid transparent;
+  transition: background 0.4s ease;
+}
+.ai-gradient-default:hover {
+  background:
+    linear-gradient(270deg,
+      var(--ai-gradient-linear-bg-hover-blue),
+      var(--ai-gradient-linear-bg-hover-purple),
+      var(--ai-gradient-linear-bg-hover-pink),
+      var(--ai-gradient-linear-bg-hover-coral)) padding-box,
+    linear-gradient(to right,
+      var(--ai-gradient-linear-border-blue),
+      var(--ai-gradient-linear-border-purple),
+      var(--ai-gradient-linear-border-pink),
+      var(--ai-gradient-linear-border-coral)) border-box;
+}
+.ai-gradient-strong {
+  background:
+    linear-gradient(90deg,
+      var(--ai-gradient-strong-linear-bg-blue),
+      var(--ai-gradient-strong-linear-bg-purple),
+      var(--ai-gradient-strong-linear-bg-pink),
+      var(--ai-gradient-strong-linear-bg-coral)) padding-box,
+    linear-gradient(to right,
+      var(--ai-gradient-strong-linear-border-blue),
+      var(--ai-gradient-strong-linear-border-purple),
+      var(--ai-gradient-strong-linear-border-pink),
+      var(--ai-gradient-strong-linear-border-coral)) border-box;
+  border: 1px solid transparent;
+  transition: background 0.4s ease;
+}
+.ai-gradient-default-borderless {
+  background: linear-gradient(90deg,
+    var(--ai-gradient-linear-bg-blue),
+    var(--ai-gradient-linear-bg-purple),
+    var(--ai-gradient-linear-bg-pink),
+    var(--ai-gradient-linear-bg-coral));
+}
+.ai-gradient-strong-borderless {
+  background: linear-gradient(90deg,
+    var(--ai-gradient-strong-linear-bg-blue),
+    var(--ai-gradient-strong-linear-bg-purple),
+    var(--ai-gradient-strong-linear-bg-pink),
+    var(--ai-gradient-strong-linear-bg-coral));
+}
+
+/* ==========================================================================
+   Dark theme — .dark class switch, matches tailwind-config/_default-theme.scss
+   ========================================================================== */
+.dark {
+  /* zinc is the dark-mode neutral family */
+  --colors-zinc-50:  #fafafa;
+  --colors-zinc-100: #f4f4f5;
+  --colors-zinc-200: #e4e4e7;
+  --colors-zinc-300: #d4d4d8;
+  --colors-zinc-400: #a1a1aa;
+  --colors-zinc-500: #71717a;
+  --colors-zinc-600: #52525b;
+  --colors-zinc-700: #373737;
+  --colors-zinc-800: #27272a;
+  --colors-zinc-900: #18181b;
+  --colors-zinc-950: #09090b;
+
+  /* ---- Background ---- */
+  --bg-neutral-default:     var(--colors-zinc-900);
+  --bg-neutral-strong:      var(--colors-zinc-800);
+  --bg-neutral-stronger:    var(--colors-zinc-700);
+  --bg-neutral-strongest:   var(--colors-zinc-600);
+  --bg-neutral-default-hover:      var(--colors-zinc-800);
+  --bg-neutral-default-disabled:   var(--colors-zinc-800);
+  --bg-neutral-stronger-hover:     var(--colors-zinc-600);
+  --bg-neutral-strongest-hover:    var(--colors-zinc-700);
+  --bg-neutral-strong-hover:       var(--colors-zinc-700);
+  --bg-neutral-inverse-weakest:    var(--colors-zinc-400);
+  --bg-neutral-inverse-weaker:     var(--colors-zinc-500);
+  --bg-neutral-inverse-weak:       var(--colors-zinc-700);
+  --bg-neutral-inverse-default:    var(--colors-zinc-50);
+  --bg-neutral-inverse-weaker-hover: var(--colors-zinc-400);
+
+  --bg-brand-weakest:  var(--colors-brand-900);
+  --bg-brand-weaker:   var(--colors-brand-800);
+  --bg-brand-weak:     var(--colors-brand-700);
+  --bg-brand-default:  var(--colors-brand-400);
+  --bg-brand-stronger: var(--colors-brand-200);
+  --bg-brand-default-hover:  var(--colors-brand-300);
+  --bg-brand-weaker-hover:   var(--colors-brand-700);
+  --bg-brand-weakest-hover:  var(--colors-brand-800);
+
+  --bg-danger-weakest:  var(--colors-danger-900);
+  --bg-danger-weaker:   var(--colors-danger-800);
+  --bg-danger-default:  var(--colors-danger-400);
+  --bg-danger-stronger: var(--colors-danger-200);
+  --bg-danger-default-hover: var(--colors-danger-300);
+  --bg-danger-weaker-hover:  var(--colors-danger-700);
+
+  --bg-success-weakest:  var(--colors-success-900);
+  --bg-success-weaker:   var(--colors-success-800);
+  --bg-success-default:  var(--colors-success-400);
+  --bg-success-strong:   var(--colors-success-300);
+  --bg-success-stronger: var(--colors-success-200);
+  --bg-success-default-hover:  var(--colors-success-300);
+  --bg-success-weaker-hover:   var(--colors-success-700);
+
+  --bg-attention-weakest:  var(--colors-attention-900);
+  --bg-attention-weaker:   var(--colors-attention-800);
+  --bg-attention-weak:     var(--colors-attention-700);
+  --bg-attention-default:  var(--colors-attention-400);
+  --bg-attention-stronger: var(--colors-attention-200);
+
+  --bg-input-default:        var(--colors-zinc-800);
+  --bg-input-default-hover:  var(--colors-zinc-700);
+  --bg-input-default-disabled:var(--colors-zinc-800);
+  --bg-raised-default:       var(--colors-zinc-800);
+  --bg-raised-default-hover: var(--colors-zinc-700);
+  --surface-default:         var(--colors-zinc-900);
+  --surface-strong:          var(--colors-zinc-950);
+
+  /* ---- Text ---- */
+  --text-ai: #FFFFFF;
+  --text-neutral-weakest: var(--colors-zinc-500);
+  --text-neutral-weaker:  var(--colors-zinc-400);
+  --text-neutral-weak:    var(--colors-zinc-300);
+  --text-neutral-default: var(--colors-zinc-200);
+  --text-neutral-inverse-default:  var(--colors-zinc-900);
+  --text-neutral-inverse-weak:     var(--colors-zinc-800);
+  --text-neutral-inverse-weakest:  var(--colors-zinc-500);
+
+  --text-brand-weaker:   var(--colors-brand-800);
+  --text-brand-weak:     var(--colors-brand-700);
+  --text-brand-default:  var(--colors-brand-400);
+  --text-brand-strong:   var(--colors-brand-300);
+  --text-brand-stronger: var(--colors-brand-200);
+  --text-brand-strongest:var(--colors-brand-100);
+
+  --text-danger-default:  var(--colors-danger-400);
+  --text-danger-strong:   var(--colors-danger-300);
+  --text-danger-stronger: var(--colors-danger-200);
+
+  --text-success-default:  var(--colors-success-300);
+  --text-success-strong:   var(--colors-success-200);
+  --text-success-stronger: var(--colors-success-100);
+
+  --text-attention-default:  var(--colors-attention-400);
+  --text-attention-strong:   var(--colors-attention-300);
+  --text-attention-stronger: var(--colors-attention-200);
+
+  --text-info-default: var(--colors-brand-400);
+
+  /* ---- Icon ---- */
+  --icon-neutral-weakest: var(--colors-zinc-600);
+  --icon-neutral-weaker:  var(--colors-zinc-500);
+  --icon-neutral-weak:    var(--colors-zinc-400);
+  --icon-neutral-default: var(--colors-zinc-300);
+  --icon-neutral-strong:  var(--colors-zinc-200);
+  --icon-neutral-strongest: var(--colors-zinc-50);
+  --icon-neutral-inverse-default: var(--colors-zinc-900);
+  --icon-neutral-inverse-weaker:  var(--colors-zinc-700);
+
+  --icon-brand-weakest: var(--colors-brand-800);
+  --icon-brand-weaker:  var(--colors-brand-700);
+  --icon-brand-weak:    var(--colors-brand-500);
+  --icon-brand-default: var(--colors-brand-400);
+  --icon-brand-strong:  var(--colors-brand-300);
+  --icon-brand-stronger:var(--colors-brand-200);
+
+  --icon-danger-default: var(--colors-danger-400);
+  --icon-success-default:var(--colors-success-400);
+  --icon-attention-default: var(--colors-attention-400);
+
+  /* ---- Border ---- */
+  --border-neutral-weak:      var(--colors-zinc-800);
+  --border-neutral-default:   var(--colors-zinc-700);
+  --border-neutral-strong:    var(--colors-zinc-600);
+  --border-neutral-stronger:  var(--colors-zinc-500);
+  --border-neutral-strongest: var(--colors-zinc-300);
+  --border-neutral-inverse-default: var(--colors-zinc-900);
+
+  --border-brand-weaker:   var(--colors-brand-800);
+  --border-brand-weak:     var(--colors-brand-700);
+  --border-brand-default:  var(--colors-brand-500);
+  --border-brand-strong:   var(--colors-brand-400);
+  --border-brand-stronger: var(--colors-brand-300);
+
+  --border-danger-default:    var(--colors-danger-500);
+  --border-success-default:   var(--colors-success-500);
+  --border-attention-default: var(--colors-attention-500);
+
+  color-scheme: dark;
+}
+
+/* ==========================================================================
+   Element defaults — so raw HTML looks correct with the DS vars
+   ========================================================================== */
+html, body {
+  font-family: var(--font-sans);
+  color: var(--text-neutral-default);
+  background: var(--bg-neutral-strong);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, .h1 {
+  font-size: var(--text-3xl); line-height: var(--leading-3xl);
+  font-weight: var(--weight-bold); letter-spacing: -0.015em;
+  color: var(--text-neutral-default);
+}
+h2, .h2 {
+  font-size: var(--text-2xl); line-height: var(--leading-2xl);
+  font-weight: var(--weight-semibold); color: var(--text-neutral-default);
+}
+h3, .h3 {
+  font-size: var(--text-xl); line-height: var(--leading-xl);
+  font-weight: var(--weight-semibold); color: var(--text-neutral-default);
+}
+h4, .h4 {
+  font-size: var(--text-lg); line-height: var(--leading-lg);
+  font-weight: var(--weight-semibold); color: var(--text-neutral-default);
+}
+h5, .h5 {
+  font-size: var(--text-base); line-height: var(--leading-base);
+  font-weight: var(--weight-semibold); color: var(--text-neutral-default);
+}
+h6, .h6 {
+  font-size: var(--text-sm); line-height: var(--leading-sm);
+  font-weight: var(--weight-semibold); color: var(--text-neutral-default);
+}
+
+p, .body {
+  font-size: var(--text-sm); line-height: var(--leading-sm);
+  color: var(--text-neutral-weak);
+}
+.body-lg { font-size: var(--text-base); line-height: var(--leading-base); }
+.body-xs { font-size: var(--text-xs);   line-height: var(--leading-xs); }
+.eyebrow {
+  font-size: var(--text-xs); line-height: var(--leading-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--text-brand-default);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+
+code, kbd, samp, .mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}

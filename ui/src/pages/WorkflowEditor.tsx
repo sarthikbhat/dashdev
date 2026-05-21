@@ -194,25 +194,37 @@ interface FormModeProps {
   }>;
 }
 
-function FormMode({ workflow, formStateRef }: FormModeProps) {
-  const initialSteps: LocalStep[] = workflow
-    ? workflow.steps.map((s, i) => ({
-        id: i + 1,
-        name: s.name,
-        cmd: s.command,
-        wd: s.workdir ?? '/',
-        type: 'shell',
-        timeout: s.timeout ? `${s.timeout}s` : '30s',
-        onFail: s.on_failure === 'continue' ? 'continue' : s.on_failure?.startsWith('retry') ? 'retry' : 'abort',
-      }))
-    : [];
+function workflowToSteps(wf: Workflow | null): LocalStep[] {
+  if (!wf) return [];
+  return wf.steps.map((s, i) => ({
+    id: i + 1,
+    name: s.name,
+    cmd: s.command,
+    wd: s.workdir ?? '/',
+    type: 'shell' as const,
+    timeout: s.timeout ? `${s.timeout}s` : '30s',
+    onFail: (s.on_failure === 'continue' ? 'continue' : s.on_failure?.startsWith('retry') ? 'retry' : 'abort') as 'abort' | 'retry' | 'continue',
+  }));
+}
 
+function FormMode({ workflow, formStateRef }: FormModeProps) {
   const [name, setName] = useState(workflow?.name ?? '');
   const [description, setDescription] = useState(workflow?.description ?? '');
   const [icon, setIconVal] = useState(workflow?.icon ?? 'W');
   const [tags, setTags] = useState<string[]>(workflow?.tags ?? []);
-  const [steps, setSteps] = useState<LocalStep[]>(initialSteps);
+  const [steps, setSteps] = useState<LocalStep[]>(workflowToSteps(workflow));
   const [expanded, setExpanded] = useState<number | null>(null);
+
+  // Reset form state when workflow loads (fixes empty editor on first load)
+  useEffect(() => {
+    if (workflow) {
+      setName(workflow.name);
+      setDescription(workflow.description ?? '');
+      setIconVal(workflow.icon ?? 'W');
+      setTags(workflow.tags ?? []);
+      setSteps(workflowToSteps(workflow));
+    }
+  }, [workflow]);
 
   // Keep formStateRef in sync so the parent Save button can read current values
   useEffect(() => {
@@ -503,6 +515,7 @@ export default function WorkflowEditor() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<'form' | 'code'>('form');
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
+  const [loading, setLoading] = useState(false);
   const [unsaved, setUnsaved] = useState(false);
 
   const formStateRef = useRef({
@@ -518,9 +531,11 @@ export default function WorkflowEditor() {
 
   useEffect(() => {
     if (id && id !== 'new') {
-      getWorkflow(id).catch(() => null).then((wf) => {
-        if (wf) setWorkflow(wf);
-      });
+      setLoading(true);
+      getWorkflow(id)
+        .then((wf) => { if (wf) setWorkflow(wf); })
+        .catch(() => null)
+        .finally(() => setLoading(false));
     }
   }, [id]);
 
@@ -703,7 +718,11 @@ export default function WorkflowEditor() {
           </div>
 
           {/* Mode content */}
-          {mode === 'form' ? <FormMode workflow={workflow} formStateRef={formStateRef} /> : <CodeMode />}
+          {loading ? (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--dd-text-4)', fontSize: 13 }}>
+              Loading workflow...
+            </div>
+          ) : mode === 'form' ? <FormMode workflow={workflow} formStateRef={formStateRef} /> : <CodeMode />}
         </main>
 
         <StatusBar processCount={processes.length} activeRuns={activeRuns} />
