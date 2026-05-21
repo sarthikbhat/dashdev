@@ -8,7 +8,7 @@ import { useWorkflows } from '../hooks/useWorkflows';
 import { useRuns } from '../hooks/useRuns';
 import { useProcesses } from '../hooks/useProcesses';
 import Icon from '../components/Icon';
-import { triggerRun, listRuns } from '../api';
+import { triggerRun } from '../api';
 
 // Stable color palette for workflow glyphs
 const GLYPH_COLORS = [
@@ -43,7 +43,7 @@ export default function Dashboard() {
 
   const { workflows, loading: wfLoading } = useWorkflows();
   const { processes } = useProcesses();
-  const { runs } = useRuns(workflowId);
+  const { runs, refresh: refreshRuns } = useRuns(workflowId);
 
   // Auto-select first workflow when navigating to /
   useEffect(() => {
@@ -57,7 +57,6 @@ export default function Dashboard() {
   // ParamModal + RunView state
   const [showParamModal, setShowParamModal] = useState(false);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
-  const [runLaunching, setRunLaunching] = useState(false);
 
   // Sidebar entries
   const sidebarWorkflows = workflows.map((wf, i) => ({
@@ -73,39 +72,23 @@ export default function Dashboard() {
   const activeRuns = processes.filter((p) => p.status === 'running').length;
 
   function handleSelect(id: string) {
+    // When switching workflows, close any active run view
+    setActiveRunId(null);
     navigate(`/workflow/${id}`);
   }
 
   function handleCreate() {
-    // Navigate to a new workflow editor — id="new" is handled by WorkflowEditor
     navigate('/workflow/new/edit');
   }
 
-  // After triggering a run, poll for the new run ID
-  async function pollForRunId(wfId: string) {
-    // API returns 202 without run_id; poll until we find the newest run
-    for (let attempt = 0; attempt < 10; attempt++) {
-      await new Promise((r) => setTimeout(r, 400));
-      try {
-        const recentRuns = await listRuns(wfId);
-        // Pick the most recent run (any status — it may already be done)
-        if (recentRuns.length > 0) {
-          setActiveRunId(recentRuns[0].id);
-          return;
-        }
-      } catch (e) {
-        console.error('Failed to poll for run ID:', e);
-      }
+  // Launch a run: call the API which now returns run_id synchronously
+  async function launchRun(wfId: string, params?: Record<string, string>) {
+    try {
+      const result = await triggerRun(wfId, params);
+      setActiveRunId(result.run_id);
+    } catch (e) {
+      console.error('Failed to trigger run:', e);
     }
-    // If we still can't find it, stop the spinner
-    setRunLaunching(false);
-  }
-
-  function launchRun(wfId: string, params?: Record<string, string>) {
-    setRunLaunching(true);
-    triggerRun(wfId, params)
-      .then(() => pollForRunId(wfId))
-      .catch(console.error);
   }
 
   function handleRun() {
@@ -129,12 +112,12 @@ export default function Dashboard() {
 
   function handleRunBack() {
     setActiveRunId(null);
-    setRunLaunching(false);
+    refreshRuns();
   }
 
   function handleRunCancel() {
     setActiveRunId(null);
-    setRunLaunching(false);
+    refreshRuns();
   }
 
   // Show EmptyState welcome screen when workflows have loaded and none exist
@@ -147,64 +130,16 @@ export default function Dashboard() {
     );
   }
 
-  // If ParamModal is open, render it as full-screen overlay
-  if (showParamModal && selectedWorkflow) {
-    const wfIcon = {
-      ch: (selectedWorkflow.name[0] ?? 'W').toUpperCase(),
-      color: assignColor(workflows.indexOf(selectedWorkflow)),
-    };
-    return (
-      <ParamModal
-        workflow={{
-          name: selectedWorkflow.name,
-          icon: wfIcon,
-          params: selectedWorkflow.params ?? [],
-        }}
-        onRun={handleParamRun}
-        onCancel={handleParamCancel}
-      />
-    );
-  }
-
-  // Show launching state immediately while polling for run ID
-  if (runLaunching && !activeRunId && selectedWorkflow) {
-    return (
-      <div className="dd" style={{ width: '100%', height: '100%' }}>
-        <div className="app-window">
-          <Titlebar path={`${selectedWorkflow.name} · launching...`} />
-          <Sidebar workflows={sidebarWorkflows} activeId={workflowId} onSelect={handleSelect} onCreate={handleCreate} />
-          <main className="main" style={{ gridArea: 'main', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
-            <div className="spinner" style={{ width: 24, height: 24, borderWidth: 2 }} />
-            <div style={{ fontSize: 14, color: 'var(--dd-text-2)' }}>Launching workflow...</div>
-            <div style={{ fontSize: 12, color: 'var(--dd-text-4)' }}>Waiting for run to start</div>
-          </main>
-          <StatusBar processCount={processes.length} activeRuns={activeRuns} />
-        </div>
-      </div>
-    );
-  }
-
-  // If a run is active, render RunView
+  // Determine titlebar path
+  let titlePath = selectedWorkflow?.name ?? 'Dashboard';
   if (activeRunId && selectedWorkflow) {
-    const wfIcon = {
-      ch: (selectedWorkflow.name[0] ?? 'W').toUpperCase(),
-      color: assignColor(workflows.indexOf(selectedWorkflow)),
-    };
-    return (
-      <RunView
-        runId={activeRunId}
-        workflowName={selectedWorkflow.name}
-        workflowIcon={wfIcon}
-        onCancel={handleRunCancel}
-        onBack={handleRunBack}
-      />
-    );
+    titlePath = `${selectedWorkflow.name} · run #${activeRunId.slice(0, 6)}`;
   }
 
   return (
     <div className="dd" style={{ width: '100%', height: '100%' }}>
       <div className="app-window">
-        <Titlebar path={selectedWorkflow?.name ?? 'Dashboard'} />
+        <Titlebar path={titlePath} />
 
         <Sidebar
           workflows={sidebarWorkflows}
@@ -216,8 +151,19 @@ export default function Dashboard() {
         <main className="main" style={{ gridArea: 'main', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           {wfLoading ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--dd-text-4)', fontSize: 13 }}>
-              Loading workflows…
+              Loading workflows...
             </div>
+          ) : activeRunId && selectedWorkflow ? (
+            <RunView
+              runId={activeRunId}
+              workflowName={selectedWorkflow.name}
+              workflowIcon={{
+                ch: (selectedWorkflow.name[0] ?? 'W').toUpperCase(),
+                color: assignColor(workflows.indexOf(selectedWorkflow)),
+              }}
+              onCancel={handleRunCancel}
+              onBack={handleRunBack}
+            />
           ) : selectedWorkflow ? (
             <WorkflowDetail
               workflow={selectedWorkflow}
@@ -235,6 +181,22 @@ export default function Dashboard() {
           activeRuns={activeRuns}
         />
       </div>
+
+      {/* ParamModal renders as a true overlay ON TOP of the whole dashboard */}
+      {showParamModal && selectedWorkflow && (
+        <ParamModal
+          workflow={{
+            name: selectedWorkflow.name,
+            icon: {
+              ch: (selectedWorkflow.name[0] ?? 'W').toUpperCase(),
+              color: assignColor(workflows.indexOf(selectedWorkflow)),
+            },
+            params: selectedWorkflow.params ?? [],
+          }}
+          onRun={handleParamRun}
+          onCancel={handleParamCancel}
+        />
+      )}
     </div>
   );
 }

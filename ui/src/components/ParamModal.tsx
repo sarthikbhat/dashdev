@@ -44,82 +44,6 @@ function Field({ label, type, required, help, children }: FieldProps) {
   );
 }
 
-// ── Backdrop hint ─────────────────────────────────────────────────────────────
-
-function BackdropHint() {
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        inset: 0,
-        opacity: 0.5,
-        filter: 'blur(0.5px)',
-        pointerEvents: 'none',
-      }}
-    >
-      {/* Fake titlebar */}
-      <div
-        style={{
-          height: 32,
-          background: '#07070a',
-          borderBottom: '1px solid var(--dd-line)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          padding: '0 12px',
-        }}
-      >
-        <div style={{ display: 'flex', gap: 6 }}>
-          <span style={{ width: 11, height: 11, borderRadius: 6, background: '#ff5f57', display: 'block' }} />
-          <span style={{ width: 11, height: 11, borderRadius: 6, background: '#febc2e', display: 'block' }} />
-          <span style={{ width: 11, height: 11, borderRadius: 6, background: '#28c840', display: 'block' }} />
-        </div>
-        <span className="mono" style={{ fontSize: 11, color: 'var(--dd-text-4)' }}>
-          localhost:3847 › DevDash
-        </span>
-      </div>
-      {/* Fake sidebar */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 32,
-          left: 0,
-          width: 240,
-          bottom: 28,
-          background: 'var(--dd-surface-2)',
-          borderRight: '1px solid var(--dd-line)',
-        }}
-      >
-        <div style={{ padding: 12 }}>
-          {[20, 32, 28, 36, 22, 30, 26].map((w, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
-              <div style={{ width: 14, height: 14, borderRadius: 3, background: 'var(--dd-surface-3)' }} />
-              <div style={{ flex: 1, height: 8, background: 'var(--dd-surface-3)', borderRadius: 2, maxWidth: `${w * 4}px` }} />
-            </div>
-          ))}
-        </div>
-      </div>
-      {/* Fake main heading */}
-      <div style={{ position: 'absolute', top: 60, left: 264, right: 24 }}>
-        <div style={{ width: 220, height: 18, background: 'var(--dd-surface-3)', borderRadius: 3, marginBottom: 8 }} />
-        <div style={{ width: 360, height: 10, background: 'var(--dd-surface-3)', borderRadius: 3, opacity: 0.6 }} />
-      </div>
-      {/* Fake status bar */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 28,
-          background: '#07070a',
-          borderTop: '1px solid var(--dd-line)',
-        }}
-      />
-    </div>
-  );
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function ParamModal({ workflow, onRun, onCancel }: Props) {
@@ -207,28 +131,21 @@ export default function ParamModal({ workflow, onRun, onCancel }: Props) {
   return (
     <div
       style={{
-        width: '100%',
-        height: '100%',
-        background: `
-          radial-gradient(circle at 30% 20%, rgba(96,165,250,0.06), transparent 50%),
-          radial-gradient(circle at 80% 70%, rgba(167,139,250,0.05), transparent 60%),
-          #0a0a0c
-        `,
+        position: 'fixed',
+        inset: 0,
+        zIndex: 1000,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        position: 'relative',
         overflow: 'hidden',
       }}
     >
-      <BackdropHint />
-
-      {/* Scrim */}
+      {/* Scrim — click to dismiss */}
       <div
         style={{
           position: 'absolute',
           inset: 0,
-          background: 'rgba(7,7,10,0.55)',
+          background: 'rgba(7,7,10,0.65)',
           backdropFilter: 'blur(4px)',
         }}
         onClick={onCancel}

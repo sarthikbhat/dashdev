@@ -5,7 +5,9 @@ import type { WorkflowRunner } from "../core/workflow-runner.js";
 export function runsRouter(db: Database, runner: WorkflowRunner): Router {
   const router = Router();
 
-  // POST / — trigger a run (body: {workflow_id, params?}). Run async, return 202 immediately.
+  // POST / — trigger a run (body: {workflow_id, params?}).
+  // Creates the run record synchronously (sqlite is sync), returns run_id immediately,
+  // then executes steps asynchronously.
   router.post("/", (req, res) => {
     const { workflow_id, params } = req.body as {
       workflow_id?: unknown;
@@ -30,20 +32,18 @@ export function runsRouter(db: Database, runner: WorkflowRunner): Router {
         ? (params as Record<string, string>)
         : {};
 
-    // Fire and forget — runner manages run creation and async execution
-    let capturedRunId: string | undefined;
+    // Create the run record synchronously so we can return run_id immediately.
+    // db.createRun is synchronous (better-sqlite3).
+    const runId = db.createRun(workflow_id, workflow.name, resolvedParams);
+
+    // Fire and forget — runner picks up the pre-created run and executes steps
     runner
-      .run(workflow_id, resolvedParams)
-      .then((runId) => {
-        capturedRunId = runId;
-      })
+      .runFromExistingRun(runId, workflow_id, resolvedParams)
       .catch(() => {
         // Errors tracked inside the runner
       });
 
-    // Return 202 immediately; the run_id is not yet available synchronously
-    // so we return the workflow_id reference instead
-    res.status(202).json({ workflow_id, status: "accepted" });
+    res.status(201).json({ run_id: runId, workflow_id, status: "accepted" });
   });
 
   // GET / — list runs (optional ?workflow_id= filter)

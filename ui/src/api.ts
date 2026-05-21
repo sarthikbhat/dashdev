@@ -58,8 +58,8 @@ export function deleteWorkflow(id: string): Promise<{ deleted: boolean }> {
 export function triggerRun(
   workflow_id: string,
   params?: Record<string, string>
-): Promise<{ workflow_id: string; status: string }> {
-  return request<{ workflow_id: string; status: string }>("/runs", {
+): Promise<{ run_id: string; workflow_id: string; status: string }> {
+  return request<{ run_id: string; workflow_id: string; status: string }>("/runs", {
     method: "POST",
     body: JSON.stringify({ workflow_id, params }),
   });

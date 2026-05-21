@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Titlebar, Sidebar, StatusBar, Icon, Badge, Glyph, Spinner } from '../components';
 import { useWorkflows } from '../hooks/useWorkflows';
 import { useRuns } from '../hooks/useRuns';
 import { useProcesses } from '../hooks/useProcesses';
-import type { Run } from '../types';
+import { getRun } from '../api';
+import type { Run, RunStep } from '../types';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -113,17 +114,46 @@ function FilterChip({
   );
 }
 
-const SAMPLE_STEPS = [
-  { i: 1, name: 'Verify clean git tree', t: '0.1s', st: 'done' },
-  { i: 2, name: 'Install dependencies', t: '24.0s', st: 'done' },
-  { i: 3, name: 'Run unit tests', t: '38.4s', st: 'done' },
-  { i: 4, name: 'Build production bundle', t: '52.1s', st: 'done' },
-  { i: 5, name: 'Push to staging cluster', t: '17.8s', st: 'done' },
-  { i: 6, name: 'Notify Slack channel', t: '0.3s', st: 'done' },
-];
+function stepStatusIcon(status: string) {
+  if (status === 'completed') return 'check';
+  if (status === 'failed' || status === 'timed_out') return 'close';
+  if (status === 'skipped') return 'remove';
+  if (status === 'cancelled') return 'do_not_disturb_on';
+  return 'more_horiz';
+}
+
+function stepStatusState(status: string) {
+  if (status === 'completed') return 'done';
+  if (status === 'failed' || status === 'timed_out' || status === 'cancelled') return 'fail';
+  if (status === 'skipped') return 'pending';
+  return 'pending';
+}
+
+function fmtStepDuration(ms?: number): string {
+  if (!ms) return '--';
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
 
 function ExpandedRow({ run }: { run: Run }) {
   const navigate = useNavigate();
+  const [steps, setSteps] = useState<RunStep[]>([]);
+  const [loadingSteps, setLoadingSteps] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    getRun(run.id)
+      .then((data) => {
+        if (!cancelled) setSteps(data.steps);
+      })
+      .catch(console.error)
+      .finally(() => { if (!cancelled) setLoadingSteps(false); });
+    return () => { cancelled = true; };
+  }, [run.id]);
+
+  const passedCount = steps.filter((s) => s.status === 'completed').length;
+  const failedCount = steps.filter((s) => s.status === 'failed' || s.status === 'timed_out').length;
+
   return (
     <tr>
       <td
@@ -154,35 +184,45 @@ function ExpandedRow({ run }: { run: Run }) {
                 marginBottom: 8,
               }}
             >
-              Steps · {SAMPLE_STEPS.length} passed
+              Steps · {passedCount} passed{failedCount > 0 ? `, ${failedCount} failed` : ''}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {SAMPLE_STEPS.map((s) => (
-                <div
-                  key={s.i}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '4px 8px',
-                    borderRadius: 4,
-                    fontSize: 12,
-                  }}
-                >
-                  <span className="step-marker done" style={{ width: 14, height: 14 }}>
-                    <Icon name="check" size={9} />
-                  </span>
-                  <span style={{ color: 'var(--dd-text)' }}>{s.name}</span>
-                  <span style={{ flex: 1 }} />
-                  <span className="mono" style={{ fontSize: 11, color: 'var(--dd-text-3)' }}>
-                    {s.t}
-                  </span>
-                </div>
-              ))}
-            </div>
+            {loadingSteps ? (
+              <div style={{ fontSize: 12, color: 'var(--dd-text-4)', padding: '8px 0' }}>
+                Loading steps...
+              </div>
+            ) : steps.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--dd-text-4)', padding: '8px 0' }}>
+                No step data available
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {steps.map((s) => (
+                  <div
+                    key={s.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '4px 8px',
+                      borderRadius: 4,
+                      fontSize: 12,
+                    }}
+                  >
+                    <span className={`step-marker ${stepStatusState(s.status)}`} style={{ width: 14, height: 14 }}>
+                      <Icon name={stepStatusIcon(s.status)} size={9} />
+                    </span>
+                    <span style={{ color: 'var(--dd-text)' }}>{s.name}</span>
+                    <span style={{ flex: 1 }} />
+                    <span className="mono" style={{ fontSize: 11, color: 'var(--dd-text-3)' }}>
+                      {fmtStepDuration(s.duration_ms)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Log preview */}
+          {/* Details */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
               <span
@@ -194,49 +234,48 @@ function ExpandedRow({ run }: { run: Run }) {
                   letterSpacing: '0.05em',
                 }}
               >
-                Log tail · step 5
+                Run details
               </span>
               <span style={{ flex: 1 }} />
               <button
                 className="btn btn-ghost btn-sm"
-                onClick={() => navigate(`/run/${run.id}`)}
+                onClick={() => navigate(`/workflow/${run.workflow_id}`)}
               >
                 <Icon name="open_in_new" size={11} />
-                Open full run
+                View workflow
               </button>
             </div>
-            <div
-              className="terminal"
-              style={{ fontSize: 11, padding: '8px 10px', maxHeight: 150, overflow: 'hidden' }}
-            >
-              <div className="term-line">
-                <span className="ts">14:11:48</span>
-                <span className="prompt">$ kubectl apply -f k8s/staging/*.yaml</span>
+            <div style={{ fontSize: 12, color: 'var(--dd-text-3)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div>
+                <span style={{ color: 'var(--dd-text-4)' }}>Run ID: </span>
+                <span className="mono">{run.id.slice(0, 12)}</span>
               </div>
-              <div className="term-line">
-                <span className="ts">14:11:48</span>deployment.apps/devdash-app configured
+              <div>
+                <span style={{ color: 'var(--dd-text-4)' }}>Duration: </span>
+                <span className="mono">{formatDuration(run.duration_ms)}</span>
               </div>
-              <div className="term-line">
-                <span className="ts">14:11:48</span>service/devdash-app unchanged
+              <div>
+                <span style={{ color: 'var(--dd-text-4)' }}>Started: </span>
+                <span>{run.started_at ? new Date(run.started_at).toLocaleString() : '--'}</span>
               </div>
-              <div className="term-line">
-                <span className="ts">14:11:49</span>configmap/devdash-config configured
-              </div>
-              <div className="term-line">
-                <span className="ts">14:11:49</span>ingress.networking/devdash unchanged
-              </div>
-              <div className="term-line">
-                <span className="ts">14:11:54</span>
-                <span className="info">→ rolling out deployment/devdash-app</span>
-              </div>
-              <div className="term-line">
-                <span className="ts">14:12:02</span>Waiting for rollout to finish: 1 of 3
-                updated replicas are available...
-              </div>
-              <div className="term-line">
-                <span className="ts">14:12:11</span>
-                <span className="info">deployment "devdash-app" successfully rolled out</span>
-              </div>
+              {run.finished_at && (
+                <div>
+                  <span style={{ color: 'var(--dd-text-4)' }}>Finished: </span>
+                  <span>{new Date(run.finished_at).toLocaleString()}</span>
+                </div>
+              )}
+              {Object.keys(run.params_used ?? {}).length > 0 && (
+                <div style={{ marginTop: 4 }}>
+                  <span style={{ color: 'var(--dd-text-4)', display: 'block', marginBottom: 4 }}>Params:</span>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {Object.entries(run.params_used).map(([k, v]) => (
+                      <span key={k} className="mono" style={{ fontSize: 11, padding: '2px 6px', background: 'var(--dd-surface-3)', border: '1px solid var(--dd-line)', borderRadius: 3 }}>
+                        {k}={v}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -497,7 +536,9 @@ export default function RunHistory() {
                           fontSize: 13,
                         }}
                       >
-                        No runs match the current filters.
+                        {runs.length === 0
+                          ? 'No runs yet. Trigger a workflow to see history here.'
+                          : 'No runs match the current filters.'}
                       </td>
                     </tr>
                   )}
