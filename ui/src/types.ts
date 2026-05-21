@@ -124,6 +124,7 @@ export interface ServerToClientEvents {
     content: string;
   }) => void;
   "process:update": (data: { id: string; status: ProcessStatus }) => void;
+  "service:status": (data: ServiceHealthStatus[]) => void;
 }
 
 export interface ClientToServerEvents {
