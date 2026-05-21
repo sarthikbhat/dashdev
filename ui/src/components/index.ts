@@ -7,3 +7,4 @@ export { default as Glyph } from './Glyph';
 export { default as Titlebar } from './Titlebar';
 export { default as Sidebar } from './Sidebar';
 export { default as StatusBar } from './StatusBar';
+export { default as WorkflowDetail } from './WorkflowDetail';
