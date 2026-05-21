@@ -67,16 +67,16 @@ export function parseBackendctl(filePath: string): BackendctlParseResult {
       const block = extractCaseBlock(healthSection, svc.name);
       if (!block) continue;
 
-      // HTTP check via curl (look for localhost:PORT/path patterns)
-      const curlMatch = block.match(/curl\s+[^'"]*['"]?(https?:\/\/localhost:[^'")\s]+)['"]?/);
-      if (curlMatch) {
+      // HTTP check via curl — find any http(s)://localhost:PORT/path in the block
+      const curlHttpMatch = block.match(/(https?:\/\/localhost:\d+[^\s"')]*)/);
+      if (curlHttpMatch) {
         svc.health_check_type = "http";
-        svc.health_check_value = curlMatch[1];
+        svc.health_check_value = curlHttpMatch[1];
         continue;
       }
 
-      // Also match curl with separate URL arg (e.g. curl -sf --max-time 3 localhost:8123)
-      const curlBareMatch = block.match(/curl\s+(?:-[a-zA-Z0-9 ]+\s+)*(?:--[a-z-]+ \S+ )*(?:--max-time \d+ )?(?:-[a-zA-Z0-9 ]+\s+)*(localhost:\d+[^\s"']*)/);
+      // Bare curl with no scheme (e.g. curl -sf localhost:8123)
+      const curlBareMatch = block.match(/curl\s+(?:-\S+\s+)*(?:--\S+\s+\S+\s+)*(localhost:\d+[^\s"')*]*)/);
       if (curlBareMatch && !curlBareMatch[1].startsWith("-")) {
         svc.health_check_type = "http";
         svc.health_check_value = `http://${curlBareMatch[1]}`;
