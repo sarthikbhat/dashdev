@@ -123,3 +123,45 @@ export interface ClientToServerEvents {
   "run:cancel": (data: { run_id: string }) => void;
   "process:kill": (data: { id: string }) => void;
 }
+
+// ── Services ────────────────────────────────────────────────────────────────
+
+export type HealthCheckType = "port" | "http" | "command";
+export type ServiceStatus = "healthy" | "down" | "degraded";
+export type ServiceCategory = "infra" | "app";
+
+export interface Service {
+  id: string;
+  name: string;
+  port: number;
+  health_check_type: HealthCheckType;
+  health_check_value?: string;  // URL for http, command for command, null for port
+  start_command?: string;
+  stop_command?: string;
+  category: ServiceCategory;
+  log_file?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ServiceGroup {
+  id: string;
+  name: string;
+  service_ids: string[];  // JSON array in DB
+  created_at: string;
+}
+
+export interface ServiceHealthStatus {
+  service_id: string;
+  status: ServiceStatus;
+  detail: string;
+  last_checked: string;
+  uptime_since?: string;
+  pid?: number;
+}
+
+// Socket events for services
+export interface ServiceSocketEvents {
+  "service:status": (data: ServiceHealthStatus[]) => void;
+  "service:log": (data: { service_id: string; content: string }) => void;
+}

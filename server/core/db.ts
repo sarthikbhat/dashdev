@@ -13,6 +13,10 @@ import type {
   RunLog,
   TrackedProcess,
   ProcessStatus,
+  Service,
+  HealthCheckType,
+  ServiceCategory,
+  ServiceGroup,
 } from "./types.js";
 
 // ─── Input types ──────────────────────────────────────────────────────────────
@@ -92,6 +96,27 @@ interface ProcessRow {
   stopped_at: string | null;
 }
 
+interface ServiceRow {
+  id: string;
+  name: string;
+  port: number;
+  health_check_type: string;
+  health_check_value: string | null;
+  start_command: string | null;
+  stop_command: string | null;
+  category: string;
+  log_file: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ServiceGroupRow {
+  id: string;
+  name: string;
+  service_ids: string;
+  created_at: string;
+}
+
 // ─── Database class ───────────────────────────────────────────────────────────
 
 export class Database {
@@ -166,6 +191,27 @@ export class Database {
         command     TEXT NOT NULL,
         started_at  TEXT NOT NULL,
         stopped_at  TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS services (
+        id                 TEXT PRIMARY KEY,
+        name               TEXT NOT NULL,
+        port               INTEGER NOT NULL,
+        health_check_type  TEXT NOT NULL DEFAULT 'port',
+        health_check_value TEXT,
+        start_command      TEXT,
+        stop_command       TEXT,
+        category           TEXT NOT NULL DEFAULT 'app',
+        log_file           TEXT,
+        created_at         TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at         TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS service_groups (
+        id          TEXT PRIMARY KEY,
+        name        TEXT NOT NULL,
+        service_ids TEXT NOT NULL DEFAULT '[]',
+        created_at  TEXT NOT NULL DEFAULT (datetime('now'))
       );
     `);
   }
@@ -526,6 +572,167 @@ export class Database {
       .prepare("SELECT * FROM processes WHERE status = 'running' ORDER BY started_at ASC")
       .all() as ProcessRow[];
     return rows.map((r) => this.rowToProcess(r));
+  }
+
+  // ─── Services ────────────────────────────────────────────────────────────────
+
+  private rowToService(row: ServiceRow): Service {
+    return {
+      id: row.id,
+      name: row.name,
+      port: row.port,
+      health_check_type: row.health_check_type as HealthCheckType,
+      health_check_value: row.health_check_value ?? undefined,
+      start_command: row.start_command ?? undefined,
+      stop_command: row.stop_command ?? undefined,
+      category: row.category as ServiceCategory,
+      log_file: row.log_file ?? undefined,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    };
+  }
+
+  createService(input: {
+    name: string;
+    port: number;
+    health_check_type?: string;
+    health_check_value?: string;
+    start_command?: string;
+    stop_command?: string;
+    category?: string;
+    log_file?: string;
+  }): string {
+    const id = randomUUID();
+    const now = this.now();
+    this.db
+      .prepare(
+        `INSERT INTO services (id, name, port, health_check_type, health_check_value, start_command, stop_command, category, log_file, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        id,
+        input.name,
+        input.port,
+        input.health_check_type ?? "port",
+        input.health_check_value ?? null,
+        input.start_command ?? null,
+        input.stop_command ?? null,
+        input.category ?? "app",
+        input.log_file ?? null,
+        now,
+        now
+      );
+    return id;
+  }
+
+  getService(id: string): Service | undefined {
+    const row = this.db
+      .prepare("SELECT * FROM services WHERE id = ?")
+      .get(id) as ServiceRow | undefined;
+    return row ? this.rowToService(row) : undefined;
+  }
+
+  listServices(): Service[] {
+    const rows = this.db
+      .prepare("SELECT * FROM services ORDER BY category ASC, name ASC")
+      .all() as ServiceRow[];
+    return rows.map((r) => this.rowToService(r));
+  }
+
+  updateService(
+    id: string,
+    input: Partial<{
+      name: string;
+      port: number;
+      health_check_type: string;
+      health_check_value: string;
+      start_command: string;
+      stop_command: string;
+      category: string;
+      log_file: string;
+    }>
+  ): void {
+    const now = this.now();
+    const fields: string[] = ["updated_at = ?"];
+    const values: unknown[] = [now];
+
+    if (input.name !== undefined) { fields.push("name = ?"); values.push(input.name); }
+    if (input.port !== undefined) { fields.push("port = ?"); values.push(input.port); }
+    if (input.health_check_type !== undefined) { fields.push("health_check_type = ?"); values.push(input.health_check_type); }
+    if (input.health_check_value !== undefined) { fields.push("health_check_value = ?"); values.push(input.health_check_value); }
+    if (input.start_command !== undefined) { fields.push("start_command = ?"); values.push(input.start_command); }
+    if (input.stop_command !== undefined) { fields.push("stop_command = ?"); values.push(input.stop_command); }
+    if (input.category !== undefined) { fields.push("category = ?"); values.push(input.category); }
+    if (input.log_file !== undefined) { fields.push("log_file = ?"); values.push(input.log_file); }
+
+    values.push(id);
+    this.db
+      .prepare(`UPDATE services SET ${fields.join(", ")} WHERE id = ?`)
+      .run(...values);
+  }
+
+  deleteService(id: string): void {
+    this.db.prepare("DELETE FROM services WHERE id = ?").run(id);
+  }
+
+  // ─── Service Groups ───────────────────────────────────────────────────────────
+
+  private rowToServiceGroup(row: ServiceGroupRow): ServiceGroup {
+    return {
+      id: row.id,
+      name: row.name,
+      service_ids: JSON.parse(row.service_ids) as string[],
+      created_at: row.created_at,
+    };
+  }
+
+  createServiceGroup(name: string, serviceIds: string[]): string {
+    const id = randomUUID();
+    const now = this.now();
+    this.db
+      .prepare(
+        `INSERT INTO service_groups (id, name, service_ids, created_at)
+         VALUES (?, ?, ?, ?)`
+      )
+      .run(id, name, JSON.stringify(serviceIds), now);
+    return id;
+  }
+
+  getServiceGroup(id: string): ServiceGroup | undefined {
+    const row = this.db
+      .prepare("SELECT * FROM service_groups WHERE id = ?")
+      .get(id) as ServiceGroupRow | undefined;
+    return row ? this.rowToServiceGroup(row) : undefined;
+  }
+
+  listServiceGroups(): ServiceGroup[] {
+    const rows = this.db
+      .prepare("SELECT * FROM service_groups ORDER BY name ASC")
+      .all() as ServiceGroupRow[];
+    return rows.map((r) => this.rowToServiceGroup(r));
+  }
+
+  updateServiceGroup(
+    id: string,
+    name?: string,
+    serviceIds?: string[]
+  ): void {
+    const fields: string[] = [];
+    const values: unknown[] = [];
+
+    if (name !== undefined) { fields.push("name = ?"); values.push(name); }
+    if (serviceIds !== undefined) { fields.push("service_ids = ?"); values.push(JSON.stringify(serviceIds)); }
+
+    if (fields.length === 0) return;
+
+    values.push(id);
+    this.db
+      .prepare(`UPDATE service_groups SET ${fields.join(", ")} WHERE id = ?`)
+      .run(...values);
+  }
+
+  deleteServiceGroup(id: string): void {
+    this.db.prepare("DELETE FROM service_groups WHERE id = ?").run(id);
   }
 
   // ─── Lifecycle ────────────────────────────────────────────────────────────────
