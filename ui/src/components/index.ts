@@ -8,3 +8,5 @@ export { default as Titlebar } from './Titlebar';
 export { default as Sidebar } from './Sidebar';
 export { default as StatusBar } from './StatusBar';
 export { default as WorkflowDetail } from './WorkflowDetail';
+export { default as RunView } from './RunView';
+export { default as ParamModal } from './ParamModal';
