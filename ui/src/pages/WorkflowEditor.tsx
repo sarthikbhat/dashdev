@@ -4,7 +4,7 @@ import { Titlebar, Sidebar, StatusBar, Icon, Badge, Glyph, Tag, Kbd } from '../c
 import { useWorkflows } from '../hooks/useWorkflows';
 import { useProcesses } from '../hooks/useProcesses';
 import { getWorkflow, saveWorkflow } from '../api';
-import type { Workflow } from '../types';
+import type { Workflow, WorkflowParam } from '../types';
 
 // ── Types local to editor ──────────────────────────────────────────────────
 
@@ -189,7 +189,9 @@ interface FormModeProps {
     name: string;
     description: string;
     icon: string;
+    color: string;
     tags: string[];
+    params: WorkflowParam[];
     steps: LocalStep[];
   }>;
 }
@@ -211,7 +213,9 @@ function FormMode({ workflow, formStateRef }: FormModeProps) {
   const [name, setName] = useState(workflow?.name ?? '');
   const [description, setDescription] = useState(workflow?.description ?? '');
   const [icon, setIconVal] = useState(workflow?.icon ?? 'W');
+  const [selectedColor, setSelectedColor] = useState('var(--dd-blue)');
   const [tags, setTags] = useState<string[]>(workflow?.tags ?? []);
+  const [params, setParams] = useState<WorkflowParam[]>(workflow?.params ?? []);
   const [steps, setSteps] = useState<LocalStep[]>(workflowToSteps(workflow));
   const [expanded, setExpanded] = useState<number | null>(null);
 
@@ -222,16 +226,15 @@ function FormMode({ workflow, formStateRef }: FormModeProps) {
       setDescription(workflow.description ?? '');
       setIconVal(workflow.icon ?? 'W');
       setTags(workflow.tags ?? []);
+      setParams(workflow.params ?? []);
       setSteps(workflowToSteps(workflow));
     }
   }, [workflow]);
 
   // Keep formStateRef in sync so the parent Save button can read current values
   useEffect(() => {
-    formStateRef.current = { name, description, icon, tags, steps };
-  }, [name, description, icon, tags, steps, formStateRef]);
-
-  const params = workflow?.params ?? [];
+    formStateRef.current = { name, description, icon, color: selectedColor, tags, params, steps };
+  }, [name, description, icon, selectedColor, tags, params, steps, formStateRef]);
 
   const colorOptions = [
     'var(--dd-red)',
@@ -265,6 +268,33 @@ function FormMode({ workflow, formStateRef }: FormModeProps) {
 
   function updateStep(id: number, patch: Partial<LocalStep>) {
     setSteps(steps.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  }
+
+  function addParam() {
+    const paramName = prompt('Parameter name:');
+    if (!paramName || !paramName.trim()) return;
+    const trimmedName = paramName.trim();
+    if (params.some((p) => p.name === trimmedName)) {
+      alert('A parameter with that name already exists.');
+      return;
+    }
+    const typeInput = prompt('Type (text / select / toggle):', 'text');
+    const paramType = (['text', 'select', 'toggle'].includes(typeInput ?? '') ? typeInput : 'text') as 'text' | 'select' | 'toggle';
+    const defaultVal = prompt('Default value (leave empty for none):', '') ?? '';
+    setParams([
+      ...params,
+      {
+        name: trimmedName,
+        label: trimmedName,
+        type: paramType,
+        default: defaultVal || undefined,
+        required: false,
+      },
+    ]);
+  }
+
+  function removeParam(paramName: string) {
+    setParams(params.filter((p) => p.name !== paramName));
   }
 
   return (
@@ -302,7 +332,7 @@ function FormMode({ workflow, formStateRef }: FormModeProps) {
 
         <FormLabel>Icon &amp; color</FormLabel>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <Glyph ch={icon || 'W'} color="var(--dd-amber)" />
+          <Glyph ch={icon || 'W'} color={selectedColor} />
           <input
             className="input mono"
             value={icon}
@@ -313,12 +343,13 @@ function FormMode({ workflow, formStateRef }: FormModeProps) {
             {colorOptions.map((c) => (
               <button
                 key={c}
+                onClick={() => setSelectedColor(c)}
                 style={{
                   width: 22,
                   height: 22,
                   borderRadius: 5,
                   border:
-                    c === 'var(--dd-amber)'
+                    c === selectedColor
                       ? '2px solid var(--dd-text)'
                       : '1px solid var(--dd-line)',
                   background: c,
@@ -414,7 +445,7 @@ function FormMode({ workflow, formStateRef }: FormModeProps) {
             Shown in the run modal when a user triggers this workflow
           </div>
         </div>
-        <button className="btn btn-secondary btn-sm">
+        <button className="btn btn-secondary btn-sm" onClick={addParam}>
           <Icon name="add" size={13} />
           Add parameter
         </button>
@@ -446,14 +477,21 @@ function FormMode({ workflow, formStateRef }: FormModeProps) {
                 <span className="mono" style={{ fontSize: 12, color: 'var(--dd-text)' }}>
                   {p.name}
                 </span>
-                <Icon name="more_horiz" size={14} style={{ color: 'var(--dd-text-4)' }} />
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ padding: '0 2px', color: 'var(--dd-text-4)' }}
+                  onClick={() => removeParam(p.name)}
+                  title="Remove parameter"
+                >
+                  <Icon name="close" size={12} />
+                </button>
               </div>
               <div
                 style={{ display: 'flex', gap: 6, fontSize: 11, color: 'var(--dd-text-3)' }}
               >
                 <span style={{ color: 'var(--dd-purple)' }}>{p.type}</span>
                 <span style={{ color: 'var(--dd-text-4)' }}>·</span>
-                <span className="mono">default = {p.default}</span>
+                <span className="mono">default = {p.default ?? '(none)'}</span>
                 {p.required && (
                   <>
                     <span style={{ color: 'var(--dd-text-4)' }}>·</span>
@@ -473,14 +511,14 @@ function FormMode({ workflow, formStateRef }: FormModeProps) {
 
 // ── CodeMode ───────────────────────────────────────────────────────────────
 
-function workflowToYaml(wf: Workflow | null, formState?: { name: string; description: string; tags: string[]; steps: LocalStep[] }): string {
+function workflowToYaml(wf: Workflow | null, formState?: { name: string; description: string; tags: string[]; params: WorkflowParam[]; steps: LocalStep[] }): string {
   if (!wf && !formState) return '# No workflow loaded';
 
   const lines: string[] = [];
   const name = formState?.name ?? wf?.name ?? '';
   const description = formState?.description ?? wf?.description ?? '';
   const tags = formState?.tags ?? wf?.tags ?? [];
-  const params = wf?.params ?? [];
+  const params = formState?.params ?? wf?.params ?? [];
 
   lines.push(`# ${name}`);
   lines.push('');
@@ -600,7 +638,48 @@ const TOKEN_COLORS: Record<TokenKind, string> = {
   keyword: '#93c5fd',
 };
 
-function CodeMode({ workflow, formStateRef }: { workflow: Workflow | null; formStateRef: React.MutableRefObject<{ name: string; description: string; icon: string; tags: string[]; steps: LocalStep[] }> }) {
+const SAMPLE_YAML = `# Sample DevDash Workflow
+name: "My Workflow"
+description: "What this workflow does"
+icon: "W"
+tags:
+  - "deploy"
+  - "ops"
+
+params:
+  - name: "branch"
+    type: text
+    label: "Branch name"
+    default: "main"
+    required: true
+
+steps:
+  - name: "Step 1"
+    command: "echo hello"
+    type: run-and-done
+    timeout: 30
+  - name: "Step 2"
+    command: "npm run build"
+    workdir: "~/app"
+    type: run-and-done
+    timeout: 300
+    on_failure: stop`;
+
+function validateYaml(formState: { name: string; steps: LocalStep[] }): { valid: boolean; issues: string[] } {
+  const issues: string[] = [];
+  if (!formState.name || !formState.name.trim()) issues.push('name is empty');
+  if (formState.steps.length === 0) issues.push('no steps defined');
+  formState.steps.forEach((s, i) => {
+    if (!s.name || !s.name.trim()) issues.push(`step ${i + 1} has no name`);
+    if (!s.cmd || !s.cmd.trim()) issues.push(`step ${i + 1} has no command`);
+  });
+  return { valid: issues.length === 0, issues };
+}
+
+function CodeMode({ workflow, formStateRef }: { workflow: Workflow | null; formStateRef: React.MutableRefObject<{ name: string; description: string; icon: string; color: string; tags: string[]; params: WorkflowParam[]; steps: LocalStep[] }> }) {
+  const [sampleOpen, setSampleOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
   // JS workflows: show read-only message
   if (workflow?.source === 'js') {
     return (
@@ -641,7 +720,9 @@ function CodeMode({ workflow, formStateRef }: { workflow: Workflow | null; formS
 
   // YAML or UI workflows: show YAML representation
   const yaml = workflowToYaml(workflow, formStateRef.current);
-  const lines = yaml.split('\n');
+  const yamlLines = yaml.split('\n');
+  const validation = validateYaml(formStateRef.current);
+  const sampleLines = SAMPLE_YAML.split('\n');
 
   return (
     <div
@@ -655,7 +736,7 @@ function CodeMode({ workflow, formStateRef }: { workflow: Workflow | null; formS
         padding: '16px 0',
       }}
     >
-      {lines.map((line, i) => {
+      {yamlLines.map((line, i) => {
         const tokens = tokenizeLine(line);
         return (
           <div key={i} style={{ display: 'flex', minHeight: 20 }}>
@@ -680,6 +761,105 @@ function CodeMode({ workflow, formStateRef }: { workflow: Workflow | null; formS
           </div>
         );
       })}
+
+      {/* Validation hint */}
+      <div
+        style={{
+          margin: '16px 16px 0 48px',
+          padding: '8px 12px',
+          borderRadius: 6,
+          background: validation.valid ? '#0a1a0f' : '#1a0a0a',
+          border: validation.valid ? '1px solid #16a34a33' : '1px solid #dc262633',
+          fontSize: 12,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}
+      >
+        <span style={{ color: validation.valid ? '#4ade80' : '#f87171' }}>
+          {validation.valid ? '\u2713' : '\u26a0'}
+        </span>
+        <span style={{ color: validation.valid ? '#4ade80' : '#f87171' }}>
+          {validation.valid ? 'Valid workflow' : `Issues: ${validation.issues.join(', ')}`}
+        </span>
+      </div>
+
+      {/* Sample YAML section */}
+      <div style={{ margin: '20px 16px 16px 48px' }}>
+        <button
+          onClick={() => setSampleOpen(!sampleOpen)}
+          style={{
+            background: 'transparent',
+            border: '1px solid #1e293b',
+            borderRadius: 6,
+            padding: '6px 12px',
+            cursor: 'pointer',
+            color: '#94a3b8',
+            fontSize: 12,
+            fontFamily: 'inherit',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          <span style={{ fontSize: 10, transform: sampleOpen ? 'rotate(90deg)' : 'rotate(0deg)', display: 'inline-block', transition: 'transform 0.15s' }}>{'\u25b6'}</span>
+          Sample YAML template
+        </button>
+
+        {sampleOpen && (
+          <div style={{ marginTop: 8, border: '1px solid #1e293b', borderRadius: 6, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 8px', borderBottom: '1px solid #1e293b', background: '#0c0c12' }}>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(SAMPLE_YAML).then(() => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  });
+                }}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid #1e293b',
+                  borderRadius: 4,
+                  padding: '3px 10px',
+                  cursor: 'pointer',
+                  color: copied ? '#4ade80' : '#94a3b8',
+                  fontSize: 11,
+                  fontFamily: 'inherit',
+                }}
+              >
+                {copied ? 'Copied!' : 'Copy sample'}
+              </button>
+            </div>
+            <div style={{ padding: '8px 0', background: '#0a0a10' }}>
+              {sampleLines.map((line, i) => {
+                const tokens = tokenizeLine(line);
+                return (
+                  <div key={i} style={{ display: 'flex', minHeight: 20 }}>
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        width: 40,
+                        textAlign: 'right',
+                        paddingRight: 12,
+                        color: '#1e293b',
+                        userSelect: 'none',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {i + 1}
+                    </span>
+                    <span style={{ flex: 1, whiteSpace: 'pre' }}>
+                      {tokens.map((tok, j) => (
+                        <span key={j} style={{ color: TOKEN_COLORS[tok.kind] }}>{tok.text}</span>
+                      ))}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -698,7 +878,7 @@ const GLYPH_COLORS_EDITOR = [
 export default function WorkflowEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<'form' | 'code'>('form');
+  const [mode, setMode] = useState<'form' | 'yaml'>('form');
   const [workflow, setWorkflow] = useState<Workflow | null>(null);
   const [loading, setLoading] = useState(false);
   const [unsaved, setUnsaved] = useState(false);
@@ -707,7 +887,9 @@ export default function WorkflowEditor() {
     name: '',
     description: '',
     icon: 'W',
+    color: 'var(--dd-blue)',
     tags: [] as string[],
+    params: [] as WorkflowParam[],
     steps: [] as LocalStep[],
   });
 
@@ -835,14 +1017,14 @@ export default function WorkflowEditor() {
                   Form
                 </button>
                 <button
-                  onClick={() => setMode('code')}
+                  onClick={() => setMode('yaml')}
                   style={{
                     padding: '4px 12px',
                     borderRadius: 4,
                     border: 0,
                     cursor: 'pointer',
-                    background: mode === 'code' ? 'var(--dd-bg)' : 'transparent',
-                    color: mode === 'code' ? 'var(--dd-text)' : 'var(--dd-text-3)',
+                    background: mode === 'yaml' ? 'var(--dd-bg)' : 'transparent',
+                    color: mode === 'yaml' ? 'var(--dd-text)' : 'var(--dd-text-3)',
                     fontFamily: 'inherit',
                     fontSize: 12,
                     fontWeight: 500,
@@ -852,7 +1034,7 @@ export default function WorkflowEditor() {
                   }}
                 >
                   <Icon name="code" size={13} />
-                  Code
+                  {workflow?.source === 'js' ? 'JS' : 'YAML'}
                 </button>
               </div>
 
@@ -885,7 +1067,7 @@ export default function WorkflowEditor() {
                       description: fs.description || undefined,
                       icon: fs.icon || undefined,
                       tags: fs.tags.length > 0 ? fs.tags : undefined,
-                      params: workflow?.params,
+                      params: fs.params.length > 0 ? fs.params : undefined,
                     }).then(() => {
                       setUnsaved(false);
                     }).catch(console.error);
@@ -908,6 +1090,7 @@ export default function WorkflowEditor() {
               Loading workflow...
             </div>
           ) : mode === 'form' ? <FormMode workflow={workflow} formStateRef={formStateRef} /> : <CodeMode workflow={workflow} formStateRef={formStateRef} />}
+
         </main>
 
         <StatusBar processCount={processes.length} activeRuns={activeRuns} />
