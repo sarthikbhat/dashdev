@@ -270,27 +270,28 @@ function FormMode({ workflow, formStateRef }: FormModeProps) {
     setSteps(steps.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   }
 
+  const [showAddParam, setShowAddParam] = useState(false);
+  const [newParamName, setNewParamName] = useState('');
+  const [newParamType, setNewParamType] = useState<'text' | 'select' | 'toggle'>('text');
+  const [newParamDefault, setNewParamDefault] = useState('');
+
   function addParam() {
-    const paramName = prompt('Parameter name:');
-    if (!paramName || !paramName.trim()) return;
-    const trimmedName = paramName.trim();
-    if (params.some((p) => p.name === trimmedName)) {
-      alert('A parameter with that name already exists.');
-      return;
-    }
-    const typeInput = prompt('Type (text / select / toggle):', 'text');
-    const paramType = (['text', 'select', 'toggle'].includes(typeInput ?? '') ? typeInput : 'text') as 'text' | 'select' | 'toggle';
-    const defaultVal = prompt('Default value (leave empty for none):', '') ?? '';
+    if (!newParamName.trim()) return;
+    if (params.some((p) => p.name === newParamName.trim())) return;
     setParams([
       ...params,
       {
-        name: trimmedName,
-        label: trimmedName,
-        type: paramType,
-        default: defaultVal || undefined,
+        name: newParamName.trim(),
+        label: newParamName.trim(),
+        type: newParamType,
+        default: newParamDefault || undefined,
         required: false,
       },
     ]);
+    setNewParamName('');
+    setNewParamType('text');
+    setNewParamDefault('');
+    setShowAddParam(false);
   }
 
   function removeParam(paramName: string) {
@@ -445,17 +446,43 @@ function FormMode({ workflow, formStateRef }: FormModeProps) {
             Shown in the run modal when a user triggers this workflow
           </div>
         </div>
-        <button className="btn btn-secondary btn-sm" onClick={addParam}>
+        <button className="btn btn-secondary btn-sm" onClick={() => setShowAddParam(!showAddParam)}>
           <Icon name="add" size={13} />
           Add parameter
         </button>
       </div>
 
-      {params.length === 0 ? (
+      {/* Inline add parameter form */}
+      {showAddParam && (
+        <div className="card" style={{ padding: 14, marginBottom: 12, maxWidth: 920, display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 160px' }}>
+            <div style={{ fontSize: 11, color: 'var(--dd-text-3)', marginBottom: 4 }}>Name</div>
+            <input className="input mono" style={{ fontSize: 12 }} placeholder="param_name" value={newParamName} onChange={(e) => setNewParamName(e.target.value)} />
+          </div>
+          <div style={{ flex: '0 0 130px' }}>
+            <div style={{ fontSize: 11, color: 'var(--dd-text-3)', marginBottom: 4 }}>Type</div>
+            <select className="input" style={{ fontSize: 12 }} value={newParamType} onChange={(e) => setNewParamType(e.target.value as any)}>
+              <option value="text">text</option>
+              <option value="select">select</option>
+              <option value="toggle">toggle</option>
+            </select>
+          </div>
+          <div style={{ flex: '1 1 160px' }}>
+            <div style={{ fontSize: 11, color: 'var(--dd-text-3)', marginBottom: 4 }}>Default</div>
+            <input className="input mono" style={{ fontSize: 12 }} placeholder="default value" value={newParamDefault} onChange={(e) => setNewParamDefault(e.target.value)} />
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button className="btn btn-primary btn-sm" onClick={addParam} disabled={!newParamName.trim()}>Add</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowAddParam(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {params.length === 0 && !showAddParam ? (
         <div style={{ fontSize: 12, color: 'var(--dd-text-4)', padding: '12px 0' }}>
           No parameters defined. Add parameters to prompt for input at runtime.
         </div>
-      ) : (
+      ) : params.length > 0 ? (
         <div
           style={{
             display: 'grid',
@@ -502,7 +529,7 @@ function FormMode({ workflow, formStateRef }: FormModeProps) {
             </div>
           ))}
         </div>
-      )}
+      ) : null}
 
       <div style={{ height: 24 }} />
     </div>
@@ -718,49 +745,67 @@ function CodeMode({ workflow, formStateRef }: { workflow: Workflow | null; formS
     );
   }
 
-  // YAML or UI workflows: show YAML representation
-  const yaml = workflowToYaml(workflow, formStateRef.current);
-  const yamlLines = yaml.split('\n');
+  // YAML or UI workflows: editable YAML
+  const [yamlText, setYamlText] = useState(() => workflowToYaml(workflow, formStateRef.current));
+  const [yamlDirty, setYamlDirty] = useState(false);
+
+  // Regenerate YAML when form state changes (but only if user hasn't manually edited)
+  useEffect(() => {
+    if (!yamlDirty) {
+      setYamlText(workflowToYaml(workflow, formStateRef.current));
+    }
+  }, [workflow, formStateRef.current.name, formStateRef.current.steps.length, yamlDirty]);
+
   const validation = validateYaml(formStateRef.current);
   const sampleLines = SAMPLE_YAML.split('\n');
+  const lineCount = yamlText.split('\n').length;
 
   return (
-    <div
-      style={{
-        flex: 1,
-        background: '#07070a',
-        overflow: 'auto',
-        fontFamily: 'var(--font-mono)',
-        fontSize: 12,
-        lineHeight: '20px',
-        padding: '16px 0',
-      }}
-    >
-      {yamlLines.map((line, i) => {
-        const tokens = tokenizeLine(line);
-        return (
-          <div key={i} style={{ display: 'flex', minHeight: 20 }}>
-            <span
-              style={{
-                display: 'inline-block',
-                width: 48,
-                textAlign: 'right',
-                paddingRight: 16,
-                color: '#334155',
-                userSelect: 'none',
-                flexShrink: 0,
-              }}
-            >
-              {i + 1}
-            </span>
-            <span style={{ flex: 1, whiteSpace: 'pre' }}>
-              {tokens.map((tok, j) => (
-                <span key={j} style={{ color: TOKEN_COLORS[tok.kind] }}>{tok.text}</span>
-              ))}
-            </span>
-          </div>
-        );
-      })}
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#07070a', overflow: 'hidden' }}>
+      {/* Editor toolbar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', padding: '6px 16px',
+        borderBottom: '1px solid var(--dd-line)', background: 'var(--dd-surface)',
+        fontSize: 11, color: 'var(--dd-text-4)', gap: 12, flexShrink: 0,
+      }}>
+        <span className="mono" style={{ color: 'var(--dd-text-2)' }}>
+          {workflow?.id ?? 'new'}.yml
+        </span>
+        {yamlDirty && <span style={{ color: 'var(--dd-amber)' }}>modified</span>}
+        <span style={{ flex: 1 }} />
+        <span>{lineCount} lines</span>
+        <span style={{ color: validation.valid ? '#4ade80' : '#f87171' }}>
+          {validation.valid ? '\u2713 valid' : `\u26a0 ${validation.issues[0]}`}
+        </span>
+      </div>
+
+      {/* Editable textarea */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        {/* Line numbers */}
+        <div style={{
+          padding: '12px 8px 12px 12px', textAlign: 'right',
+          fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: '20px',
+          color: '#334155', userSelect: 'none', flexShrink: 0, minWidth: 40,
+          overflow: 'hidden',
+        }}>
+          {Array.from({ length: lineCount }, (_, i) => (
+            <div key={i}>{i + 1}</div>
+          ))}
+        </div>
+
+        <textarea
+          value={yamlText}
+          onChange={(e) => { setYamlText(e.target.value); setYamlDirty(true); }}
+          spellCheck={false}
+          style={{
+            flex: 1, padding: '12px 14px', margin: 0,
+            background: 'transparent', border: 'none', outline: 'none', resize: 'none',
+            fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: '20px',
+            color: '#e2e8f0', caretColor: 'var(--dd-blue)',
+            overflow: 'auto', whiteSpace: 'pre', tabSize: 2,
+          }}
+        />
+      </div>
 
       {/* Validation hint */}
       <div
