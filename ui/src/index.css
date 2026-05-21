@@ -157,6 +157,12 @@ html, body, #root {
   overflow: hidden;
 }
 
+/* Page header */
+.pg-head {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--dd-line);
+}
+
 /* Step styling */
 .step {
   display: flex; align-items: flex-start; gap: 10px;
