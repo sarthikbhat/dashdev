@@ -140,7 +140,32 @@ export function servicesRouter(
 
     try {
       const result = parseBackendctl(file_path);
-      res.json({ imported: result.services.length, ...result });
+
+      // Insert parsed services into DB
+      for (const svc of result.services) {
+        db.createService({
+          name: svc.name,
+          port: svc.port,
+          health_check_type: svc.health_check_type,
+          health_check_value: svc.health_check_value,
+          start_command: svc.start_command,
+          stop_command: svc.stop_command,
+          category: svc.category,
+        });
+      }
+
+      // Insert parsed groups into DB
+      const allServices = db.listServices();
+      for (const group of result.groups) {
+        const serviceIds = group.service_names
+          .map((name: string) => allServices.find((s) => s.name === name)?.id)
+          .filter((id): id is string => !!id);
+        if (serviceIds.length > 0) {
+          db.createServiceGroup(group.name, serviceIds);
+        }
+      }
+
+      res.json({ imported: result.services.length, groups: result.groups });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       res.status(400).json({ error: `Failed to parse backendctl file: ${message}` });
