@@ -6,6 +6,9 @@ import type {
   TrackedProcess,
   WorkflowStep,
   WorkflowParam,
+  Service,
+  ServiceHealthStatus,
+  ServiceGroup,
 } from "./types";
 
 const BASE = "/api";
@@ -97,3 +100,24 @@ export function killProcess(id: string): Promise<{ killed: boolean }> {
 export function health(): Promise<{ status: string; uptime: number }> {
   return request<{ status: string; uptime: number }>("/health");
 }
+
+// ── Services ───────────────────────────────────────────────────────────────
+
+const fetchJson = <T>(path: string, init?: RequestInit): Promise<T> =>
+  request<T>(path, init);
+
+export const listServices = () => fetchJson<Service[]>("/services");
+export const createService = (data: any) => fetchJson<{ id: string }>("/services", { method: "POST", body: JSON.stringify(data) });
+export const updateService = (id: string, data: any) => fetchJson<void>(`/services/${id}`, { method: "PUT", body: JSON.stringify(data) });
+export const deleteService = (id: string) => fetchJson<void>(`/services/${id}`, { method: "DELETE" });
+export const getServicesStatus = () => fetchJson<ServiceHealthStatus[]>("/services/status");
+export const startService = (id: string) => fetchJson<void>(`/services/${id}/start`, { method: "POST" });
+export const stopService = (id: string) => fetchJson<void>(`/services/${id}/stop`, { method: "POST" });
+export const restartService = (id: string) => fetchJson<void>(`/services/${id}/restart`, { method: "POST" });
+export const getServiceLogs = (id: string) => fetchJson<{ lines: string[] }>(`/services/${id}/logs`);
+export const listServiceGroups = () => fetchJson<ServiceGroup[]>("/services/groups");
+export const createServiceGroup = (data: any) => fetchJson<{ id: string }>("/services/groups", { method: "POST", body: JSON.stringify(data) });
+export const deleteServiceGroup = (id: string) => fetchJson<void>(`/services/groups/${id}`, { method: "DELETE" });
+export const startServiceGroup = (id: string) => fetchJson<void>(`/services/groups/${id}/start`, { method: "POST" });
+export const stopServiceGroup = (id: string) => fetchJson<void>(`/services/groups/${id}/stop`, { method: "POST" });
+export const importBackendctl = (filePath: string) => fetchJson<{ imported: number }>("/services/import-backendctl", { method: "POST", body: JSON.stringify({ file_path: filePath }) });
