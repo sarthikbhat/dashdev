@@ -6,64 +6,106 @@ interface Props {
 }
 
 export default function Titlebar({ path }: Props) {
+  // Build breadcrumb from path (e.g. "Edit · Deploy Forge App" → ["Edit", "Deploy Forge App"])
+  const crumbs = path.split(/\s*[·›]\s*/).filter(Boolean);
+
   return (
     <div
       style={{
-        gridArea: 'tabs',
-        height: 32,
-        background: '#07070a',
+        gridArea: 'header',
+        height: 44,
+        background: 'var(--dd-surface)',
         display: 'flex',
         alignItems: 'center',
-        paddingLeft: 12,
-        paddingRight: 12,
+        paddingLeft: 16,
+        paddingRight: 16,
         borderBottom: '1px solid var(--dd-line)',
-        gap: 12,
+        gap: 16,
         flexShrink: 0,
         userSelect: 'none',
       }}
     >
-      {/* Traffic lights */}
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#ff5f57' }} />
-        <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#febc2e' }} />
-        <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#28c840' }} />
+      {/* Logo + name */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: 5,
+            background: 'linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 700,
+            fontSize: 13,
+            color: '#fff',
+            letterSpacing: -0.5,
+          }}
+        >
+          D
+        </div>
+        <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--dd-text)' }}>
+          DevDash
+        </span>
       </div>
 
-      {/* URL bar */}
+      {/* Breadcrumb */}
       <div
         style={{
           flex: 1,
           display: 'flex',
-          justifyContent: 'center',
           alignItems: 'center',
+          gap: 6,
+          minWidth: 0,
+          overflow: 'hidden',
         }}
       >
         <span
           style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            color: 'var(--dd-text-3)',
-            letterSpacing: 0.2,
+            color: 'var(--dd-text-4)',
+            fontSize: 14,
+            lineHeight: 1,
+            flexShrink: 0,
           }}
         >
-          localhost:3847
-          <span style={{ color: 'var(--dd-text-4)', margin: '0 4px' }}>›</span>
-          <span style={{ color: 'var(--dd-text-2)' }}>{path}</span>
+          ›
         </span>
+        {crumbs.map((crumb, i) => (
+          <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            {i > 0 && (
+              <span style={{ color: 'var(--dd-text-4)', fontSize: 12, flexShrink: 0 }}>›</span>
+            )}
+            <span
+              style={{
+                fontSize: 12,
+                color: i === crumbs.length - 1 ? 'var(--dd-text-2)' : 'var(--dd-text-3)',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {crumb}
+            </span>
+          </span>
+        ))}
       </div>
 
       {/* Right side controls */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
         <span
           style={{
             fontFamily: 'var(--font-mono)',
             fontSize: 10,
             color: 'var(--dd-text-4)',
+            padding: '2px 6px',
+            background: 'var(--dd-surface-3)',
+            borderRadius: 4,
+            border: '1px solid var(--dd-line)',
           }}
         >
           v0.1.0
         </span>
-        <Icon name="search" size={14} style={{ color: 'var(--dd-text-3)', cursor: 'pointer' }} />
+        <Icon name="search" size={15} style={{ color: 'var(--dd-text-3)', cursor: 'pointer' }} />
         <Kbd>⌘K</Kbd>
       </div>
     </div>

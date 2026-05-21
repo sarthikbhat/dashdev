@@ -640,7 +640,7 @@ function CodeMode({ workflow, formStateRef }: { workflow: Workflow | null; formS
   }
 
   // YAML or UI workflows: show YAML representation
-  const yaml = workflowToYaml(workflow, workflow?.source === 'ui' ? formStateRef.current : undefined);
+  const yaml = workflowToYaml(workflow, formStateRef.current);
   const lines = yaml.split('\n');
 
   return (

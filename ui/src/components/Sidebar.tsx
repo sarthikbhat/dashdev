@@ -43,62 +43,6 @@ export default function Sidebar({ workflows, activeId, onSelect, onCreate }: Pro
         overflow: 'hidden',
       }}
     >
-      {/* Header */}
-      <div
-        style={{
-          padding: '10px 12px 8px',
-          borderBottom: '1px solid var(--dd-line)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          flexShrink: 0,
-        }}
-      >
-        {/* Logo */}
-        <div
-          style={{
-            width: 22,
-            height: 22,
-            borderRadius: 5,
-            background: 'linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 700,
-            fontSize: 13,
-            color: '#fff',
-            flexShrink: 0,
-            letterSpacing: -0.5,
-          }}
-        >
-          D
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              fontWeight: 600,
-              fontSize: 13,
-              color: 'var(--dd-text)',
-              lineHeight: 1.2,
-            }}
-          >
-            DevDash
-          </div>
-          <div
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 9,
-              color: 'var(--dd-text-4)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            ~/Desktop/code/tm
-          </div>
-        </div>
-      </div>
-
       {/* Search */}
       <div style={{ padding: '8px 10px', flexShrink: 0 }}>
         <div style={{ position: 'relative' }}>

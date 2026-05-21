@@ -151,9 +151,9 @@ html, body, #root {
   width: 100%; height: 100%;
   background: var(--dd-bg);
   display: grid;
-  grid-template-rows: 32px 1fr 28px;
+  grid-template-rows: 44px 1fr 28px;
   grid-template-columns: 240px 1fr;
-  grid-template-areas: 'tabs tabs' 'side main' 'status status';
+  grid-template-areas: 'header header' 'side main' 'status status';
   overflow: hidden;
 }
 

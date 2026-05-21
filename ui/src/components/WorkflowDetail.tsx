@@ -85,7 +85,7 @@ export default function WorkflowDetail({ workflow, runs, glyphColor, onRun }: Pr
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Page header */}
-      <div className="pg-head" style={{ flexShrink: 0 }}>
+      <div className="pg-head" style={{ flexShrink: 0, marginBottom: 0 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
@@ -131,7 +131,7 @@ export default function WorkflowDetail({ workflow, runs, glyphColor, onRun }: Pr
       {/* Body — 2-column */}
       <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 320px', overflow: 'hidden' }}>
         {/* Left column */}
-        <div style={{ padding: '16px 22px', overflow: 'auto' }}>
+        <div style={{ padding: '20px 22px', overflow: 'auto' }}>
           {/* Steps section */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -142,9 +142,6 @@ export default function WorkflowDetail({ workflow, runs, glyphColor, onRun }: Pr
                 {workflow.steps.length} · {estStr}
               </span>
             </div>
-            <button className="btn btn-ghost btn-sm">
-              <Icon name="visibility" size={12} />Dry run
-            </button>
           </div>
 
           <div className="card" style={{ padding: 4, marginBottom: 18 }}>
@@ -318,8 +315,6 @@ export default function WorkflowDetail({ workflow, runs, glyphColor, onRun }: Pr
               {workflow.steps[0]?.on_failure ?? 'stop'}
             </dd>
 
-            <dt style={{ color: 'var(--dd-text-4)' }}>Schedule</dt>
-            <dd style={{ margin: 0, color: 'var(--dd-text-3)' }}>—</dd>
           </dl>
 
           {/* Duration trend sparkline */}
@@ -334,22 +329,6 @@ export default function WorkflowDetail({ workflow, runs, glyphColor, onRun }: Pr
             </div>
           </div>
 
-          {/* Triggers */}
-          <div style={{ marginTop: 18, fontSize: 11, fontWeight: 600, color: 'var(--dd-text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
-            Triggers
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--dd-surface-3)', borderRadius: 5, border: '1px solid var(--dd-line)' }}>
-              <Icon name="keyboard" size={14} style={{ color: 'var(--dd-text-3)' }} />
-              <span style={{ fontSize: 12, flex: 1 }}>Keyboard shortcut</span>
-              <Kbd>⌘⇧R</Kbd>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--dd-surface-3)', borderRadius: 5, border: '1px solid var(--dd-line)' }}>
-              <Icon name="webhook" size={14} style={{ color: 'var(--dd-text-3)' }} />
-              <span style={{ fontSize: 12, flex: 1 }}>Webhook</span>
-              <span className="mono" style={{ fontSize: 10, color: 'var(--dd-text-4)' }}>/hook/{workflow.id.slice(0, 8)}</span>
-            </div>
-          </div>
         </aside>
       </div>
     </div>
