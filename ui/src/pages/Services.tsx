@@ -331,9 +331,11 @@ interface ServiceCardProps {
   expanded: boolean;
   onToggle: () => void;
   onAction: (action: 'start' | 'stop' | 'restart', id: string) => void;
+  onEdit: (service: Service) => void;
+  onDelete: (service: Service) => void;
 }
 
-function ServiceCard({ service, expanded, onToggle, onAction }: ServiceCardProps) {
+function ServiceCard({ service, expanded, onToggle, onAction, onEdit, onDelete }: ServiceCardProps) {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   async function handleAction(
@@ -506,6 +508,32 @@ function ServiceCard({ service, expanded, onToggle, onAction }: ServiceCardProps
           >
             <Icon name="refresh" size={14} />
           </button>
+          {/* Divider */}
+          <div
+            style={{
+              width: 1,
+              height: 22,
+              background: 'var(--dd-line-2)',
+              margin: '0 2px',
+              alignSelf: 'center',
+            }}
+          />
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={(e) => { e.stopPropagation(); onEdit(service); }}
+            title="Edit service"
+            style={{ padding: '3px 6px' }}
+          >
+            <Icon name="edit" size={13} />
+          </button>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={(e) => { e.stopPropagation(); onDelete(service); }}
+            title="Delete service"
+            style={{ padding: '3px 6px', color: 'var(--dd-red)' }}
+          >
+            <Icon name="delete" size={13} />
+          </button>
         </div>
       </div>
 
@@ -614,9 +642,10 @@ interface GroupCardProps {
   services: Service[];
   onStartAll: (id: string) => void;
   onStopAll: (id: string) => void;
+  onDelete: (group: ServiceGroup) => void;
 }
 
-function GroupCard({ group, services, onStartAll, onStopAll }: GroupCardProps) {
+function GroupCard({ group, services, onStartAll, onStopAll, onDelete }: GroupCardProps) {
   const members = services.filter((s) => group.service_ids.includes(s.id));
   const healthy = members.filter((s) => s.status === 'healthy').length;
   const [loading, setLoading] = useState<string | null>(null);
@@ -659,7 +688,7 @@ function GroupCard({ group, services, onStartAll, onStopAll }: GroupCardProps) {
           )}
         </div>
       </div>
-      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+      <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignItems: 'center' }}>
         <button
           className="btn btn-sm"
           style={{
@@ -692,14 +721,147 @@ function GroupCard({ group, services, onStartAll, onStopAll }: GroupCardProps) {
           <Icon name="stop" size={13} />
           Stop All
         </button>
+        {/* Divider */}
+        <div
+          style={{
+            width: 1,
+            height: 22,
+            background: 'var(--dd-line-2)',
+            margin: '0 2px',
+          }}
+        />
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => onDelete(group)}
+          title="Delete group"
+          style={{ padding: '3px 6px', color: 'var(--dd-red)' }}
+        >
+          <Icon name="delete" size={13} />
+        </button>
       </div>
     </div>
   );
 }
 
-// ── Add Service Modal ─────────────────────────────────────────────────────
+// ── Empty State ───────────────────────────────────────────────────────────
 
-interface AddServiceModalProps {
+interface EmptyStateProps {
+  onAddService: () => void;
+  onImport: () => void;
+  importStatus: string | null;
+}
+
+function EmptyState({ onAddService, onImport, importStatus }: EmptyStateProps) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '60px 24px',
+        gap: 20,
+      }}
+    >
+      <Icon name="dns" size={48} style={{ color: 'var(--dd-line-2)' }} />
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--dd-text-2)', marginBottom: 6 }}>
+          No services configured
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--dd-text-4)', maxWidth: 320 }}>
+          Add services manually or import your existing backendctl configuration.
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+        {/* Import card */}
+        <button
+          onClick={onImport}
+          disabled={importStatus === 'importing...'}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 8,
+            padding: '18px 24px',
+            borderRadius: 10,
+            border: '1px solid var(--dd-line-2)',
+            background: 'var(--dd-surface-3)',
+            cursor: importStatus === 'importing...' ? 'not-allowed' : 'pointer',
+            color: 'var(--dd-text-2)',
+            width: 160,
+            transition: 'border-color 100ms ease, background 100ms ease',
+            fontFamily: 'inherit',
+            opacity: importStatus === 'importing...' ? 0.6 : 1,
+          }}
+          onMouseEnter={(e) => {
+            if (importStatus !== 'importing...')
+              e.currentTarget.style.borderColor = 'var(--dd-blue)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = 'var(--dd-line-2)';
+          }}
+        >
+          <Icon name="download" size={24} style={{ color: 'var(--dd-blue)' }} />
+          <div style={{ fontSize: 12, fontWeight: 600 }}>
+            {importStatus === 'importing...' ? 'Importing...' : 'Import from backendctl'}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--dd-text-4)', textAlign: 'center' }}>
+            Already have a backendctl setup?
+          </div>
+        </button>
+        {/* Add manually card */}
+        <button
+          onClick={onAddService}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 8,
+            padding: '18px 24px',
+            borderRadius: 10,
+            border: '1px solid var(--dd-line-2)',
+            background: 'var(--dd-surface-3)',
+            cursor: 'pointer',
+            color: 'var(--dd-text-2)',
+            width: 160,
+            transition: 'border-color 100ms ease, background 100ms ease',
+            fontFamily: 'inherit',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = 'var(--dd-blue)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = 'var(--dd-line-2)';
+          }}
+        >
+          <Icon name="add_circle" size={24} style={{ color: 'var(--dd-green)' }} />
+          <div style={{ fontSize: 12, fontWeight: 600 }}>Add your first service</div>
+          <div style={{ fontSize: 11, color: 'var(--dd-text-4)', textAlign: 'center' }}>
+            Configure a new service manually
+          </div>
+        </button>
+      </div>
+      {importStatus && importStatus !== 'importing...' && (
+        <span
+          style={{
+            fontSize: 11,
+            color: importStatus.startsWith('Import failed')
+              ? 'var(--dd-red)'
+              : 'var(--dd-green)',
+            fontFamily: 'var(--font-mono)',
+          }}
+        >
+          {importStatus}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ── Add/Edit Service Modal ────────────────────────────────────────────────
+
+interface ServiceModalProps {
+  editingService?: Service | null;
   onSave: (data: {
     name: string;
     port: number;
@@ -713,15 +875,16 @@ interface AddServiceModalProps {
   onCancel: () => void;
 }
 
-function AddServiceModal({ onSave, onCancel }: AddServiceModalProps) {
-  const [name, setName] = useState('');
-  const [port, setPort] = useState('');
-  const [category, setCategory] = useState<ServiceCategory>('app');
-  const [hcType, setHcType] = useState<HealthCheckType>('port');
-  const [hcValue, setHcValue] = useState('');
-  const [startCmd, setStartCmd] = useState('');
-  const [stopCmd, setStopCmd] = useState('');
-  const [logFile, setLogFile] = useState('');
+function ServiceModal({ editingService, onSave, onCancel }: ServiceModalProps) {
+  const isEditing = !!editingService;
+  const [name, setName] = useState(editingService?.name ?? '');
+  const [port, setPort] = useState(editingService?.port ? String(editingService.port) : '');
+  const [category, setCategory] = useState<ServiceCategory>(editingService?.category ?? 'app');
+  const [hcType, setHcType] = useState<HealthCheckType>(editingService?.health_check_type ?? 'port');
+  const [hcValue, setHcValue] = useState(editingService?.health_check_value ?? '');
+  const [startCmd, setStartCmd] = useState(editingService?.start_command ?? '');
+  const [stopCmd, setStopCmd] = useState(editingService?.stop_command ?? '');
+  const [logFile, setLogFile] = useState(editingService?.log_file ?? '');
   const [validationError, setValidationError] = useState('');
 
   function handleSave() {
@@ -780,7 +943,7 @@ function AddServiceModal({ onSave, onCancel }: AddServiceModalProps) {
           }}
         >
           <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--dd-text)' }}>
-            Add Service
+            {isEditing ? 'Edit Service' : 'Add Service'}
           </span>
           <button
             className="btn btn-ghost btn-sm"
@@ -919,8 +1082,8 @@ function AddServiceModal({ onSave, onCancel }: AddServiceModalProps) {
             Cancel
           </button>
           <button className="btn btn-primary" onClick={handleSave}>
-            <Icon name="add" size={14} />
-            Save
+            <Icon name={isEditing ? 'save' : 'add'} size={14} />
+            {isEditing ? 'Save changes' : 'Save'}
           </button>
         </div>
       </div>
@@ -1194,6 +1357,7 @@ export default function Services() {
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [expandedServiceId, setExpandedServiceId] = useState<string | null>(null);
   const [showAddService, setShowAddService] = useState(false);
+  const [editingService, setEditingService] = useState<Service | null>(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
 
@@ -1237,13 +1401,33 @@ export default function Services() {
     }
   }
 
-  async function handleAddService(data: Parameters<AddServiceModalProps['onSave']>[0]) {
+  async function handleSaveService(data: Parameters<ServiceModalProps['onSave']>[0]) {
     try {
-      await api.createService(data);
-      setShowAddService(false);
+      if (editingService) {
+        await api.updateService(editingService.id, data);
+        setEditingService(null);
+      } else {
+        await api.createService(data);
+        setShowAddService(false);
+      }
       await refreshServices();
     } catch (e) {
-      console.error('Failed to create service:', e);
+      console.error('Failed to save service:', e);
+    }
+  }
+
+  function handleCancelServiceModal() {
+    setShowAddService(false);
+    setEditingService(null);
+  }
+
+  async function handleDeleteService(service: Service) {
+    if (!window.confirm(`Delete ${service.name}?`)) return;
+    try {
+      await api.deleteService(service.id);
+      await refreshServices();
+    } catch (e) {
+      console.error('Failed to delete service:', e);
     }
   }
 
@@ -1254,6 +1438,16 @@ export default function Services() {
       await refreshGroups();
     } catch (e) {
       console.error('Failed to create group:', e);
+    }
+  }
+
+  async function handleDeleteGroup(group: ServiceGroup) {
+    if (!window.confirm(`Delete group "${group.name}"?`)) return;
+    try {
+      await api.deleteServiceGroup(group.id);
+      await refreshGroups();
+    } catch (e) {
+      console.error('Failed to delete group:', e);
     }
   }
 
@@ -1287,6 +1481,8 @@ export default function Services() {
   const titlePath = activeGroup
     ? `Services · ${groups.find((g) => g.id === activeGroup)?.name ?? 'Group'}`
     : 'Services';
+
+  const showServiceModal = showAddService || editingService !== null;
 
   return (
     <div className="dd" style={{ width: '100%', height: '100%' }}>
@@ -1326,92 +1522,79 @@ export default function Services() {
             </div>
           ) : (
             <div style={{ flex: 1, overflow: 'auto' }}>
-              {/* Page header */}
-              <div className="pg-head" style={{ marginBottom: 0 }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 16,
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <h1
-                      style={{
-                        fontSize: 18,
-                        fontWeight: 600,
-                        color: 'var(--dd-text)',
-                      }}
-                    >
-                      Services
-                    </h1>
-                    <span
-                      className="badge"
-                      style={{
-                        background: statusBg(
-                          healthyCount === services.length
-                            ? 'healthy'
-                            : healthyCount === 0
-                              ? 'down'
-                              : 'degraded'
-                        ),
-                        color: statusColor(
-                          healthyCount === services.length
-                            ? 'healthy'
-                            : healthyCount === 0
-                              ? 'down'
-                              : 'degraded'
-                        ),
-                        borderColor: statusBorder(
-                          healthyCount === services.length
-                            ? 'healthy'
-                            : healthyCount === 0
-                              ? 'down'
-                              : 'degraded'
-                        ),
-                      }}
-                    >
-                      <span className="dot" />
-                      {healthyCount}/{services.length} healthy
-                    </span>
-                    {importStatus && (
-                      <span
+              {/* Page header — only shown when services exist */}
+              {services.length > 0 && (
+                <div className="pg-head" style={{ marginBottom: 0 }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 16,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <h1
                         style={{
-                          fontSize: 11,
-                          color: importStatus.startsWith('Import failed')
-                            ? 'var(--dd-red)'
-                            : 'var(--dd-green)',
-                          fontFamily: 'var(--font-mono)',
+                          fontSize: 18,
+                          fontWeight: 600,
+                          color: 'var(--dd-text)',
                         }}
                       >
-                        {importStatus}
+                        Services
+                      </h1>
+                      <span
+                        className="badge"
+                        style={{
+                          background: statusBg(
+                            healthyCount === services.length
+                              ? 'healthy'
+                              : healthyCount === 0
+                                ? 'down'
+                                : 'degraded'
+                          ),
+                          color: statusColor(
+                            healthyCount === services.length
+                              ? 'healthy'
+                              : healthyCount === 0
+                                ? 'down'
+                                : 'degraded'
+                          ),
+                          borderColor: statusBorder(
+                            healthyCount === services.length
+                              ? 'healthy'
+                              : healthyCount === 0
+                                ? 'down'
+                                : 'degraded'
+                          ),
+                        }}
+                      >
+                        <span className="dot" />
+                        {healthyCount}/{services.length} healthy
                       </span>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                    <button
-                      className="btn btn-secondary"
-                      onClick={handleImport}
-                      disabled={importStatus === 'importing...'}
-                    >
-                      <Icon name="download" size={14} />
-                      Import backendctl
-                    </button>
-                    <button
-                      className="btn btn-primary"
-                      onClick={() => setShowAddService(true)}
-                    >
-                      <Icon name="add" size={14} />
-                      Add service
-                    </button>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => setShowAddService(true)}
+                      >
+                        <Icon name="add" size={14} />
+                        Add service
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              {/* Service cards */}
-              <div style={{ padding: '16px 24px' }}>
-                {filteredServices.length === 0 ? (
+              {/* Service cards or empty state */}
+              <div style={{ padding: services.length > 0 ? '16px 24px' : '0' }}>
+                {services.length === 0 ? (
+                  <EmptyState
+                    onAddService={() => setShowAddService(true)}
+                    onImport={handleImport}
+                    importStatus={importStatus}
+                  />
+                ) : filteredServices.length === 0 ? (
                   <div
                     style={{
                       display: 'flex',
@@ -1435,18 +1618,7 @@ export default function Services() {
                         fontWeight: 500,
                       }}
                     >
-                      No services found
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: 'var(--dd-text-4)',
-                        textAlign: 'center',
-                        maxWidth: 300,
-                      }}
-                    >
-                      Add a service manually or import from your backendctl
-                      configuration file.
+                      No services in this group
                     </div>
                   </div>
                 ) : (
@@ -1460,13 +1632,15 @@ export default function Services() {
                         expanded={expandedServiceId === svc.id}
                         onToggle={() => handleToggleExpand(svc.id)}
                         onAction={handleServiceAction}
+                        onEdit={(s) => setEditingService(s)}
+                        onDelete={handleDeleteService}
                       />
                     ))}
                   </div>
                 )}
 
                 {/* Groups section */}
-                {groups.length > 0 && (
+                {groups.length > 0 && services.length > 0 && (
                   <div style={{ marginTop: 24 }}>
                     <div
                       style={{
@@ -1508,6 +1682,7 @@ export default function Services() {
                           services={services}
                           onStartAll={handleGroupStart}
                           onStopAll={handleGroupStop}
+                          onDelete={handleDeleteGroup}
                         />
                       ))}
                     </div>
@@ -1540,10 +1715,11 @@ export default function Services() {
       </div>
 
       {/* Modals */}
-      {showAddService && (
-        <AddServiceModal
-          onSave={handleAddService}
-          onCancel={() => setShowAddService(false)}
+      {showServiceModal && (
+        <ServiceModal
+          editingService={editingService}
+          onSave={handleSaveService}
+          onCancel={handleCancelServiceModal}
         />
       )}
       {showCreateGroup && (
