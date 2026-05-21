@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import Glyph from './Glyph';
 import Spinner from './Spinner';
-import Tag from './Tag';
 import Icon from './Icon';
 
 interface WorkflowEntry {
@@ -28,8 +27,6 @@ export default function Sidebar({ workflows, activeId, onSelect, onCreate }: Pro
   );
 
   const running = workflows.filter((w) => w.running);
-
-  const allTags = Array.from(new Set(workflows.flatMap((w) => w.tags ?? [])));
 
   return (
     <div
@@ -178,35 +175,6 @@ export default function Sidebar({ workflows, activeId, onSelect, onCreate }: Pro
           );
         })}
       </div>
-
-      {/* Tags section */}
-      {allTags.length > 0 && (
-        <div
-          style={{
-            padding: '8px 10px',
-            borderTop: '1px solid var(--dd-line)',
-            flexShrink: 0,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 500,
-              color: 'var(--dd-text-4)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-              marginBottom: 6,
-            }}
-          >
-            Tags
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-            {allTags.map((tag) => (
-              <Tag key={tag}>{tag}</Tag>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Running section */}
       {running.length > 0 && (

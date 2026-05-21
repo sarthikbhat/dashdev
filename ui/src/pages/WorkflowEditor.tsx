@@ -473,28 +473,213 @@ function FormMode({ workflow, formStateRef }: FormModeProps) {
 
 // ── CodeMode ───────────────────────────────────────────────────────────────
 
-function CodeMode() {
+function workflowToYaml(wf: Workflow | null, formState?: { name: string; description: string; tags: string[]; steps: LocalStep[] }): string {
+  if (!wf && !formState) return '# No workflow loaded';
+
+  const lines: string[] = [];
+  const name = formState?.name ?? wf?.name ?? '';
+  const description = formState?.description ?? wf?.description ?? '';
+  const tags = formState?.tags ?? wf?.tags ?? [];
+  const params = wf?.params ?? [];
+
+  lines.push(`# ${name}`);
+  lines.push('');
+  lines.push(`name: "${name}"`);
+  if (description) {
+    lines.push(`description: "${description}"`);
+  }
+  if (wf?.source) {
+    lines.push(`source: ${wf.source}`);
+  }
+  if (tags.length > 0) {
+    lines.push('tags:');
+    tags.forEach((t) => lines.push(`  - "${t}"`));
+  }
+
+  if (params.length > 0) {
+    lines.push('');
+    lines.push('params:');
+    params.forEach((p) => {
+      lines.push(`  - name: "${p.name}"`);
+      lines.push(`    type: ${p.type}`);
+      if (p.label) lines.push(`    label: "${p.label}"`);
+      if (p.default !== undefined) lines.push(`    default: "${p.default}"`);
+      if (p.required) lines.push('    required: true');
+    });
+  }
+
+  lines.push('');
+  lines.push('steps:');
+
+  if (formState?.steps) {
+    formState.steps.forEach((s) => {
+      lines.push(`  - name: "${s.name}"`);
+      lines.push(`    command: "${s.cmd}"`);
+      if (s.wd && s.wd !== '/') lines.push(`    workdir: "${s.wd}"`);
+      lines.push(`    type: shell`);
+      lines.push(`    timeout: ${parseInt(s.timeout) || 30}`);
+      if (s.onFail !== 'abort') lines.push(`    on_failure: ${s.onFail === 'retry' ? 'retry:3' : 'continue'}`);
+    });
+  } else if (wf) {
+    wf.steps.forEach((s) => {
+      lines.push(`  - name: "${s.name}"`);
+      lines.push(`    command: "${s.command}"`);
+      if (s.workdir) lines.push(`    workdir: "${s.workdir}"`);
+      lines.push(`    type: ${s.type}`);
+      if (s.timeout) lines.push(`    timeout: ${s.timeout}`);
+      if (s.on_failure && s.on_failure !== 'stop') lines.push(`    on_failure: ${s.on_failure}`);
+      if (s.env && Object.keys(s.env).length > 0) {
+        lines.push('    env:');
+        Object.entries(s.env).forEach(([k, v]) => lines.push(`      ${k}: "${v}"`));
+      }
+    });
+  }
+
+  return lines.join('\n');
+}
+
+type TokenKind = 'key' | 'string' | 'comment' | 'plain' | 'keyword';
+
+function tokenizeLine(line: string): Array<{ kind: TokenKind; text: string }> {
+  // Comment lines
+  if (line.trimStart().startsWith('#')) {
+    const indent = line.match(/^(\s*)/)?.[0] ?? '';
+    return [
+      { kind: 'plain', text: indent },
+      { kind: 'comment', text: line.trimStart() },
+    ];
+  }
+
+  const tokens: Array<{ kind: TokenKind; text: string }> = [];
+  // Check for key: value pattern
+  const keyMatch = line.match(/^(\s*-?\s*)([a-zA-Z_][a-zA-Z0-9_]*)(:)(.*)/);
+  if (keyMatch) {
+    tokens.push({ kind: 'plain', text: keyMatch[1] });
+    tokens.push({ kind: 'key', text: keyMatch[2] });
+    tokens.push({ kind: 'plain', text: keyMatch[3] });
+    const rest = keyMatch[4];
+    if (rest) {
+      // Check if value is a quoted string
+      const strMatch = rest.match(/^(\s*)(\"[^\"]*\"|'[^']*')(.*)/);
+      if (strMatch) {
+        tokens.push({ kind: 'plain', text: strMatch[1] });
+        tokens.push({ kind: 'string', text: strMatch[2] });
+        if (strMatch[3]) tokens.push({ kind: 'plain', text: strMatch[3] });
+      } else {
+        // Check for keywords (true, false, null) or numbers
+        const kwMatch = rest.match(/^(\s*)(true|false|null|\d+)(\s*.*)/);
+        if (kwMatch) {
+          tokens.push({ kind: 'plain', text: kwMatch[1] });
+          tokens.push({ kind: 'keyword', text: kwMatch[2] });
+          if (kwMatch[3]) tokens.push({ kind: 'plain', text: kwMatch[3] });
+        } else {
+          tokens.push({ kind: 'plain', text: rest });
+        }
+      }
+    }
+    return tokens;
+  }
+
+  // List items with string values: - "value"
+  const listStrMatch = line.match(/^(\s*-\s*)(\"[^\"]*\"|'[^']*')(.*)/);
+  if (listStrMatch) {
+    tokens.push({ kind: 'plain', text: listStrMatch[1] });
+    tokens.push({ kind: 'string', text: listStrMatch[2] });
+    if (listStrMatch[3]) tokens.push({ kind: 'plain', text: listStrMatch[3] });
+    return tokens;
+  }
+
+  return [{ kind: 'plain', text: line }];
+}
+
+const TOKEN_COLORS: Record<TokenKind, string> = {
+  key: '#e2e8f0',
+  string: '#86efac',
+  comment: '#64748b',
+  plain: '#94a3b8',
+  keyword: '#93c5fd',
+};
+
+function CodeMode({ workflow, formStateRef }: { workflow: Workflow | null; formStateRef: React.MutableRefObject<{ name: string; description: string; icon: string; tags: string[]; steps: LocalStep[] }> }) {
+  // JS workflows: show read-only message
+  if (workflow?.source === 'js') {
+    return (
+      <div
+        style={{
+          flex: 1,
+          background: '#07070a',
+          padding: '32px 28px',
+          overflow: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+        }}
+      >
+        <div style={{ fontSize: 13, color: '#94a3b8', fontFamily: 'var(--font-mono)' }}>
+          This is a JavaScript workflow.
+        </div>
+        <div style={{ fontSize: 13, color: '#94a3b8', fontFamily: 'var(--font-mono)' }}>
+          Edit the file directly:
+        </div>
+        <div
+          style={{
+            fontSize: 13,
+            color: '#86efac',
+            fontFamily: 'var(--font-mono)',
+            background: '#0f0f14',
+            padding: '10px 14px',
+            borderRadius: 6,
+            border: '1px solid #1e293b',
+            marginTop: 4,
+          }}
+        >
+          {workflow.file_path ?? `workflows/${workflow.id}.js`}
+        </div>
+      </div>
+    );
+  }
+
+  // YAML or UI workflows: show YAML representation
+  const yaml = workflowToYaml(workflow, workflow?.source === 'ui' ? formStateRef.current : undefined);
+  const lines = yaml.split('\n');
+
   return (
     <div
       style={{
         flex: 1,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexDirection: 'column',
-        gap: 12,
-        color: 'var(--dd-text-4)',
-        padding: 40,
+        background: '#07070a',
+        overflow: 'auto',
+        fontFamily: 'var(--font-mono)',
+        fontSize: 12,
+        lineHeight: '20px',
+        padding: '16px 0',
       }}
     >
-      <Icon name="code" size={40} style={{ color: 'var(--dd-line-2)' }} />
-      <div style={{ fontSize: 14, color: 'var(--dd-text-3)', fontWeight: 500 }}>
-        Code editing coming soon
-      </div>
-      <div style={{ fontSize: 12, color: 'var(--dd-text-4)', textAlign: 'center', maxWidth: 320 }}>
-        Use <strong>Form</strong> mode to edit workflow steps, parameters, and metadata.
-        Code mode will support direct YAML/JS editing in a future release.
-      </div>
+      {lines.map((line, i) => {
+        const tokens = tokenizeLine(line);
+        return (
+          <div key={i} style={{ display: 'flex', minHeight: 20 }}>
+            <span
+              style={{
+                display: 'inline-block',
+                width: 48,
+                textAlign: 'right',
+                paddingRight: 16,
+                color: '#334155',
+                userSelect: 'none',
+                flexShrink: 0,
+              }}
+            >
+              {i + 1}
+            </span>
+            <span style={{ flex: 1, whiteSpace: 'pre' }}>
+              {tokens.map((tok, j) => (
+                <span key={j} style={{ color: TOKEN_COLORS[tok.kind] }}>{tok.text}</span>
+              ))}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -722,7 +907,7 @@ export default function WorkflowEditor() {
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--dd-text-4)', fontSize: 13 }}>
               Loading workflow...
             </div>
-          ) : mode === 'form' ? <FormMode workflow={workflow} formStateRef={formStateRef} /> : <CodeMode />}
+          ) : mode === 'form' ? <FormMode workflow={workflow} formStateRef={formStateRef} /> : <CodeMode workflow={workflow} formStateRef={formStateRef} />}
         </main>
 
         <StatusBar processCount={processes.length} activeRuns={activeRuns} />
