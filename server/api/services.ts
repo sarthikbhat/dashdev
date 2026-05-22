@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { exec } from "node:child_process";
+import { exec, spawn as nodeSpawn } from "node:child_process";
 import { promisify } from "node:util";
 import type { Database } from "../core/db.js";
 import type { ServiceMonitor } from "../core/service-monitor.js";
@@ -89,12 +89,16 @@ export function servicesRouter(
 
     res.status(202).json({ started: true, group_id: group.id });
 
-    // Start services in background
+    // Start services as fully detached processes
     for (const serviceId of group.service_ids) {
       const service = db.getService(serviceId);
       if (!service?.start_command) continue;
-      const cmd = `bash -l -c '${service.start_command.replace(/'/g, "'\\''")}'`;
-      pm.spawnBackground({ command: cmd, type: "long-running" });
+      const escaped = service.start_command.replace(/'/g, "'\\''");
+      const child = nodeSpawn("bash", ["-l", "-c", `nohup bash -c '${escaped}' > /dev/null 2>&1 &`], {
+        detached: true,
+        stdio: "ignore",
+      });
+      child.unref();
     }
   });
 
@@ -291,10 +295,15 @@ export function servicesRouter(
       return;
     }
 
-    // Use spawnBackground for long-running services (servers, daemons)
-    // Wrap in login shell so rbenv/nvm/sdkman are loaded
-    const cmd = `bash -l -c '${service.start_command.replace(/'/g, "'\\''")}'`;
-    pm.spawnBackground({ command: cmd, type: "long-running" });
+    // Services must be fully detached — they should survive DevDash restarts.
+    // Don't use ProcessManager (it tracks and kills children on shutdown).
+    // Instead, spawn a fully detached process via nohup + disown pattern.
+    const escaped = service.start_command.replace(/'/g, "'\\''");
+    const child = nodeSpawn("bash", ["-l", "-c", `nohup bash -c '${escaped}' > /dev/null 2>&1 &`], {
+      detached: true,
+      stdio: "ignore",
+    });
+    child.unref();
 
     res.status(202).json({ started: true });
   });
