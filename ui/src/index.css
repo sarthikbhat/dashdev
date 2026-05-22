@@ -185,3 +185,6 @@ table.dd-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .dd-table th { text-align: left; font-weight: 500; font-size: 11px; color: var(--dd-text-3); text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 14px; background: var(--dd-surface-2); border-bottom: 1px solid var(--dd-line); }
 .dd-table td { padding: 10px 14px; border-bottom: 1px solid var(--dd-line); color: var(--dd-text-2); vertical-align: middle; }
 .dd-table tr:hover td { background: var(--dd-surface-2); }
+
+/* Toast animation */
+@keyframes dd-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }

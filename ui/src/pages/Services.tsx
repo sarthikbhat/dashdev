@@ -50,28 +50,115 @@ function formatUptime(since?: string): string {
   return 'up <1m';
 }
 
-// ── ServicesSidebar ───────────────────────────────────────────────────────
+// ── Toast system ─────────────────────────────────────────────────────────
+
+interface Toast {
+  id: string;
+  message: string;
+  type: 'info' | 'success' | 'error';
+}
+
+let toastCounter = 0;
+
+function Toasts({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: string) => void }) {
+  if (toasts.length === 0) return null;
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        bottom: 40,
+        right: 16,
+        zIndex: 200,
+        display: 'flex',
+        flexDirection: 'column-reverse',
+        gap: 6,
+        maxWidth: 360,
+      }}
+    >
+      {toasts.map((t) => (
+        <div
+          key={t.id}
+          style={{
+            padding: '8px 14px',
+            borderRadius: 6,
+            fontSize: 12,
+            fontWeight: 500,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            background:
+              t.type === 'error'
+                ? 'rgba(248,113,113,0.12)'
+                : t.type === 'success'
+                  ? 'rgba(52,211,153,0.12)'
+                  : 'rgba(96,165,250,0.12)',
+            border: `1px solid ${
+              t.type === 'error'
+                ? 'rgba(248,113,113,0.25)'
+                : t.type === 'success'
+                  ? 'rgba(52,211,153,0.25)'
+                  : 'rgba(96,165,250,0.25)'
+            }`,
+            color:
+              t.type === 'error'
+                ? 'var(--dd-red)'
+                : t.type === 'success'
+                  ? 'var(--dd-green)'
+                  : 'var(--dd-blue)',
+            animation: 'dd-toast-in 200ms ease',
+          }}
+        >
+          <Icon
+            name={
+              t.type === 'error'
+                ? 'error'
+                : t.type === 'success'
+                  ? 'check_circle'
+                  : 'info'
+            }
+            size={14}
+          />
+          <span style={{ flex: 1 }}>{t.message}</span>
+          <button
+            onClick={() => onDismiss(t.id)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'inherit',
+              padding: 0,
+              display: 'flex',
+              opacity: 0.6,
+            }}
+          >
+            <Icon name="close" size={12} />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Sidebar (simple service list) ────────────────────────────────────────
 
 interface SidebarProps {
   services: Service[];
-  groups: ServiceGroup[];
-  activeGroup: string | null; // null = "All"
-  selectedServiceId: string | null;
-  onSelectGroup: (groupId: string | null) => void;
-  onSelectService: (serviceId: string) => void;
-  onNewGroup: () => void;
+  search: string;
+  onSearchChange: (v: string) => void;
+  highlightedServiceId: string | null;
+  onSelectService: (id: string) => void;
 }
 
 function ServicesSidebar({
   services,
-  groups,
-  activeGroup,
-  selectedServiceId,
-  onSelectGroup,
+  search,
+  onSearchChange,
+  highlightedServiceId,
   onSelectService,
-  onNewGroup,
 }: SidebarProps) {
-  const healthyCount = services.filter((s) => s.status === 'healthy').length;
+  const filtered = services.filter((s) =>
+    s.name.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <div
@@ -85,75 +172,33 @@ function ServicesSidebar({
         overflow: 'hidden',
       }}
     >
-      {/* Groups header */}
-      <div
-        style={{
-          padding: '10px 10px 6px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexShrink: 0,
-        }}
-      >
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 500,
-            color: 'var(--dd-text-4)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.06em',
-          }}
-        >
-          Groups
-        </span>
-        <button
-          className="btn btn-ghost btn-sm"
-          onClick={onNewGroup}
-          style={{ padding: '2px 6px', fontSize: 11 }}
-        >
-          <Icon name="add" size={12} />
-          New
-        </button>
+      {/* Search */}
+      <div style={{ padding: '10px 8px 6px', flexShrink: 0 }}>
+        <div style={{ position: 'relative' }}>
+          <Icon
+            name="search"
+            size={14}
+            style={{
+              position: 'absolute',
+              left: 8,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: 'var(--dd-text-4)',
+              pointerEvents: 'none',
+            }}
+          />
+          <input
+            className="input"
+            value={search}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Search services..."
+            style={{ paddingLeft: 28, fontSize: 12, padding: '5px 8px 5px 28px' }}
+          />
+        </div>
       </div>
-
-      {/* Group list */}
-      <div style={{ padding: '0 6px 4px', flexShrink: 0 }}>
-        {/* All */}
-        <SidebarItem
-          label="All"
-          count={`${healthyCount}/${services.length}`}
-          active={activeGroup === null}
-          onClick={() => onSelectGroup(null)}
-          icon="apps"
-        />
-        {groups.map((g) => {
-          const members = services.filter((s) => g.service_ids.includes(s.id));
-          const running = members.filter((s) => s.status === 'healthy').length;
-          return (
-            <SidebarItem
-              key={g.id}
-              label={g.name}
-              count={`${running}/${members.length}`}
-              active={activeGroup === g.id}
-              onClick={() => onSelectGroup(g.id)}
-              icon="folder"
-            />
-          );
-        })}
-      </div>
-
-      {/* Divider */}
-      <div
-        style={{
-          height: 1,
-          background: 'var(--dd-line)',
-          margin: '2px 10px 6px',
-          flexShrink: 0,
-        }}
-      />
 
       {/* Services header */}
-      <div style={{ padding: '4px 10px 6px', flexShrink: 0 }}>
+      <div style={{ padding: '6px 10px 4px', flexShrink: 0 }}>
         <span
           style={{
             fontSize: 10,
@@ -163,13 +208,13 @@ function ServicesSidebar({
             letterSpacing: '0.06em',
           }}
         >
-          Services
+          Services ({filtered.length})
         </span>
       </div>
 
       {/* Service list */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 6px 6px' }}>
-        {services.length === 0 && (
+        {filtered.length === 0 && (
           <div
             style={{
               padding: '12px 8px',
@@ -178,11 +223,11 @@ function ServicesSidebar({
               textAlign: 'center',
             }}
           >
-            No services
+            {search ? 'No matches' : 'No services'}
           </div>
         )}
-        {services.map((svc) => {
-          const isActive = svc.id === selectedServiceId;
+        {filtered.map((svc) => {
+          const isActive = svc.id === highlightedServiceId;
           return (
             <button
               key={svc.id}
@@ -256,296 +301,9 @@ function ServicesSidebar({
   );
 }
 
-function SidebarItem({
-  label,
-  count,
-  active,
-  onClick,
-  icon,
-}: {
-  label: string;
-  count: string;
-  active: boolean;
-  onClick: () => void;
-  icon: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        width: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '5px 8px',
-        borderRadius: 5,
-        border: 'none',
-        background: active ? 'rgba(96,165,250,0.08)' : 'transparent',
-        borderLeft: active
-          ? '2px solid var(--dd-blue)'
-          : '2px solid transparent',
-        color: active ? 'var(--dd-text)' : 'var(--dd-text-2)',
-        cursor: 'pointer',
-        textAlign: 'left',
-        fontSize: 12,
-        fontFamily: 'inherit',
-        marginBottom: 1,
-        transition: 'background 100ms ease',
-      }}
-      onMouseEnter={(e) => {
-        if (!active)
-          (e.currentTarget as HTMLButtonElement).style.background =
-            'var(--dd-surface-3)';
-      }}
-      onMouseLeave={(e) => {
-        if (!active)
-          (e.currentTarget as HTMLButtonElement).style.background =
-            'transparent';
-      }}
-    >
-      <Icon name={icon} size={14} style={{ color: 'var(--dd-text-3)' }} />
-      <span
-        style={{
-          flex: 1,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {label}
-      </span>
-      <span
-        className="mono"
-        style={{ fontSize: 10, color: 'var(--dd-text-4)', flexShrink: 0 }}
-      >
-        {count}
-      </span>
-    </button>
-  );
-}
-
-// ── Service Card ──────────────────────────────────────────────────────────
-
-interface ServiceCardProps {
-  service: Service;
-  expanded: boolean;
-  onToggle: () => void;
-  onAction: (action: 'start' | 'stop' | 'restart', id: string) => void;
-  onEdit: (service: Service) => void;
-  onDelete: (service: Service) => void;
-}
-
-function ServiceCard({ service, expanded, onToggle, onAction, onEdit, onDelete }: ServiceCardProps) {
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-
-  async function handleAction(
-    e: React.MouseEvent,
-    action: 'start' | 'stop' | 'restart'
-  ) {
-    e.stopPropagation();
-    setActionLoading(action);
-    try {
-      await onAction(action, service.id);
-    } finally {
-      setTimeout(() => setActionLoading(null), 800);
-    }
-  }
-
-  const isHealthy = service.status === 'healthy';
-  const isDown = service.status === 'down';
-
-  return (
-    <div
-      className="card"
-      style={{
-        padding: 0,
-        overflow: 'hidden',
-        borderColor: expanded ? 'var(--dd-blue)' : undefined,
-      }}
-    >
-      <div
-        onClick={onToggle}
-        style={{
-          padding: '12px 14px',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: 12,
-          transition: 'background 100ms ease',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = 'var(--dd-surface-3)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = '';
-        }}
-      >
-        {/* Status dot */}
-        <div
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: statusColor(service.status),
-            boxShadow: `0 0 0 3px ${statusBg(service.status)}`,
-            flexShrink: 0,
-            marginTop: 5,
-          }}
-        />
-
-        {/* Info */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              marginBottom: 4,
-            }}
-          >
-            <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--dd-text)' }}>
-              {service.name}
-            </span>
-            <span
-              className="mono"
-              style={{ fontSize: 11, color: 'var(--dd-text-4)' }}
-            >
-              :{service.port}
-            </span>
-            <span
-              className="badge"
-              style={{
-                background: statusBg(service.status),
-                color: statusColor(service.status),
-                borderColor: statusBorder(service.status),
-                fontSize: 10,
-                padding: '1px 6px',
-              }}
-            >
-              {service.category}
-            </span>
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              fontSize: 11,
-              color: 'var(--dd-text-3)',
-            }}
-          >
-            {service.detail && (
-              <span className="mono" style={{ color: 'var(--dd-text-2)' }}>
-                {service.detail}
-              </span>
-            )}
-            <span style={{ color: 'var(--dd-text-4)' }}>
-              {service.status === 'healthy'
-                ? formatUptime(service.uptime_since)
-                : service.status ?? 'unknown'}
-            </span>
-            {service.pid && (
-              <span className="mono" style={{ color: 'var(--dd-text-4)' }}>
-                pid {service.pid}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Action buttons */}
-        <div
-          style={{ display: 'flex', gap: 4, flexShrink: 0 }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            className="btn btn-sm"
-            style={{
-              color: 'var(--dd-green)',
-              background:
-                actionLoading === 'start'
-                  ? 'rgba(52,211,153,0.15)'
-                  : 'var(--dd-surface-3)',
-              borderColor: 'var(--dd-line-2)',
-              opacity: isHealthy ? 0.4 : 1,
-            }}
-            disabled={isHealthy || actionLoading !== null}
-            onClick={(e) => handleAction(e, 'start')}
-            title="Start"
-          >
-            <Icon name="play_arrow" size={14} />
-          </button>
-          <button
-            className="btn btn-sm"
-            style={{
-              color: 'var(--dd-red)',
-              background:
-                actionLoading === 'stop'
-                  ? 'rgba(248,113,113,0.15)'
-                  : 'var(--dd-surface-3)',
-              borderColor: 'var(--dd-line-2)',
-              opacity: isDown ? 0.4 : 1,
-            }}
-            disabled={isDown || actionLoading !== null}
-            onClick={(e) => handleAction(e, 'stop')}
-            title="Stop"
-          >
-            <Icon name="stop" size={14} />
-          </button>
-          <button
-            className="btn btn-sm"
-            style={{
-              color: 'var(--dd-amber)',
-              background:
-                actionLoading === 'restart'
-                  ? 'rgba(251,191,36,0.15)'
-                  : 'var(--dd-surface-3)',
-              borderColor: 'var(--dd-line-2)',
-              opacity: isDown ? 0.4 : 1,
-            }}
-            disabled={isDown || actionLoading !== null}
-            onClick={(e) => handleAction(e, 'restart')}
-            title="Restart"
-          >
-            <Icon name="refresh" size={14} />
-          </button>
-          {/* Divider */}
-          <div
-            style={{
-              width: 1,
-              height: 22,
-              background: 'var(--dd-line-2)',
-              margin: '0 2px',
-              alignSelf: 'center',
-            }}
-          />
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={(e) => { e.stopPropagation(); onEdit(service); }}
-            title="Edit service"
-            style={{ padding: '3px 6px' }}
-          >
-            <Icon name="edit" size={13} />
-          </button>
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={(e) => { e.stopPropagation(); onDelete(service); }}
-            title="Delete service"
-            style={{ padding: '3px 6px', color: 'var(--dd-red)' }}
-          >
-            <Icon name="delete" size={13} />
-          </button>
-        </div>
-      </div>
-
-      {/* Expanded log panel */}
-      {expanded && <LogPanel serviceId={service.id} />}
-    </div>
-  );
-}
-
 // ── Log Panel ─────────────────────────────────────────────────────────────
 
-function LogPanel({ serviceId }: { serviceId: string }) {
+function LogPanel({ serviceId, serviceName, onClose }: { serviceId: string; serviceName: string; onClose: () => void }) {
   const [lines, setLines] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -554,7 +312,7 @@ function LogPanel({ serviceId }: { serviceId: string }) {
   const fetchLogs = useCallback(async () => {
     try {
       const data = await api.getServiceLogs(serviceId);
-      setLines(data.lines);
+      setLines(data.lines.slice(-200));
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load logs');
@@ -575,7 +333,12 @@ function LogPanel({ serviceId }: { serviceId: string }) {
   }, [lines]);
 
   return (
-    <div style={{ borderTop: '1px solid var(--dd-line)' }}>
+    <div
+      style={{
+        borderTop: '1px solid var(--dd-line)',
+        background: 'var(--dd-surface)',
+      }}
+    >
       <div
         style={{
           display: 'flex',
@@ -587,29 +350,41 @@ function LogPanel({ serviceId }: { serviceId: string }) {
       >
         <span
           style={{
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 500,
-            color: 'var(--dd-text-4)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.06em',
+            color: 'var(--dd-text-3)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
           }}
         >
-          Logs
+          <Icon name="terminal" size={13} />
+          Logs: {serviceName}
         </span>
-        <button
-          className="btn btn-ghost btn-sm"
-          onClick={fetchLogs}
-          style={{ padding: '2px 6px', fontSize: 11 }}
-        >
-          <Icon name="refresh" size={12} />
-          Refresh
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={fetchLogs}
+            style={{ padding: '2px 6px', fontSize: 11 }}
+          >
+            <Icon name="refresh" size={12} />
+            Refresh
+          </button>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={onClose}
+            style={{ padding: '2px 6px', fontSize: 11 }}
+          >
+            <Icon name="close" size={12} />
+            Close
+          </button>
+        </div>
       </div>
       <div
         ref={containerRef}
         className="terminal"
         style={{
-          maxHeight: 220,
+          maxHeight: 260,
           overflowY: 'auto',
           borderRadius: 0,
           border: 'none',
@@ -635,7 +410,7 @@ function LogPanel({ serviceId }: { serviceId: string }) {
   );
 }
 
-// ── Group Card ────────────────────────────────────────────────────────────
+// ── Group Card (for groups section below table) ──────────────────────────
 
 interface GroupCardProps {
   group: ServiceGroup;
@@ -662,94 +437,65 @@ function GroupCard({ group, services, onStartAll, onStopAll, onDelete }: GroupCa
 
   return (
     <div
-      className="card"
       style={{
-        padding: '12px 14px',
-        display: 'flex',
+        display: 'inline-flex',
         alignItems: 'center',
-        gap: 12,
+        gap: 8,
+        padding: '6px 12px',
+        borderRadius: 8,
+        background: 'var(--dd-surface-2)',
+        border: '1px solid var(--dd-line)',
+        fontSize: 12,
       }}
     >
-      <Icon
-        name="folder"
-        size={18}
-        style={{ color: 'var(--dd-text-3)', flexShrink: 0 }}
-      />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--dd-text)' }}>
-          {group.name}
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--dd-text-3)' }}>
-          {healthy}/{members.length} healthy
-          {members.length > 0 && (
-            <span style={{ color: 'var(--dd-text-4)', marginLeft: 8 }}>
-              {members.map((m) => m.name).join(', ')}
-            </span>
-          )}
-        </div>
-      </div>
-      <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignItems: 'center' }}>
-        <button
-          className="btn btn-sm"
-          style={{
-            color: 'var(--dd-green)',
-            background:
-              loading === 'start'
-                ? 'rgba(52,211,153,0.15)'
-                : 'var(--dd-surface-3)',
-            borderColor: 'var(--dd-line-2)',
-          }}
-          disabled={loading !== null}
-          onClick={() => handleAction('start')}
-        >
-          <Icon name="play_arrow" size={13} />
-          Start All
-        </button>
-        <button
-          className="btn btn-sm"
-          style={{
-            color: 'var(--dd-red)',
-            background:
-              loading === 'stop'
-                ? 'rgba(248,113,113,0.15)'
-                : 'var(--dd-surface-3)',
-            borderColor: 'var(--dd-line-2)',
-          }}
-          disabled={loading !== null}
-          onClick={() => handleAction('stop')}
-        >
-          <Icon name="stop" size={13} />
-          Stop All
-        </button>
-        {/* Divider */}
-        <div
-          style={{
-            width: 1,
-            height: 22,
-            background: 'var(--dd-line-2)',
-            margin: '0 2px',
-          }}
-        />
-        <button
-          className="btn btn-ghost btn-sm"
-          onClick={() => onDelete(group)}
-          title="Delete group"
-          style={{ padding: '3px 6px', color: 'var(--dd-red)' }}
-        >
-          <Icon name="delete" size={13} />
-        </button>
-      </div>
+      <Icon name="folder" size={14} style={{ color: 'var(--dd-text-3)' }} />
+      <span style={{ fontWeight: 600, color: 'var(--dd-text)' }}>{group.name}</span>
+      <span className="mono" style={{ fontSize: 10, color: 'var(--dd-text-4)' }}>
+        {healthy}/{members.length}
+      </span>
+      <button
+        className="btn btn-sm"
+        style={{
+          color: 'var(--dd-green)',
+          background: loading === 'start' ? 'rgba(52,211,153,0.15)' : 'var(--dd-surface-3)',
+          borderColor: 'var(--dd-line-2)',
+          padding: '2px 6px',
+        }}
+        disabled={loading !== null}
+        onClick={() => handleAction('start')}
+        title="Start all"
+      >
+        <Icon name="play_arrow" size={12} />
+      </button>
+      <button
+        className="btn btn-sm"
+        style={{
+          color: 'var(--dd-red)',
+          background: loading === 'stop' ? 'rgba(248,113,113,0.15)' : 'var(--dd-surface-3)',
+          borderColor: 'var(--dd-line-2)',
+          padding: '2px 6px',
+        }}
+        disabled={loading !== null}
+        onClick={() => handleAction('stop')}
+        title="Stop all"
+      >
+        <Icon name="stop" size={12} />
+      </button>
+      <button
+        className="btn btn-ghost btn-sm"
+        onClick={() => onDelete(group)}
+        title="Delete group"
+        style={{ padding: '2px 4px', color: 'var(--dd-red)' }}
+      >
+        <Icon name="delete" size={12} />
+      </button>
     </div>
   );
 }
 
 // ── Empty State ───────────────────────────────────────────────────────────
 
-interface EmptyStateProps {
-  onAddService: () => void;
-}
-
-function EmptyState({ onAddService }: EmptyStateProps) {
+function EmptyState({ onAddService }: { onAddService: () => void }) {
   return (
     <div
       style={{
@@ -770,39 +516,36 @@ function EmptyState({ onAddService }: EmptyStateProps) {
           Add services to monitor their health and manage them from here.
         </div>
       </div>
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
-        {/* Add manually card */}
-        <button
-          onClick={onAddService}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 8,
-            padding: '18px 24px',
-            borderRadius: 10,
-            border: '1px solid var(--dd-line-2)',
-            background: 'var(--dd-surface-3)',
-            cursor: 'pointer',
-            color: 'var(--dd-text-2)',
-            width: 160,
-            transition: 'border-color 100ms ease, background 100ms ease',
-            fontFamily: 'inherit',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = 'var(--dd-blue)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = 'var(--dd-line-2)';
-          }}
-        >
-          <Icon name="add_circle" size={24} style={{ color: 'var(--dd-green)' }} />
-          <div style={{ fontSize: 12, fontWeight: 600 }}>Add your first service</div>
-          <div style={{ fontSize: 11, color: 'var(--dd-text-4)', textAlign: 'center' }}>
-            Configure a new service manually
-          </div>
-        </button>
-      </div>
+      <button
+        onClick={onAddService}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 8,
+          padding: '18px 24px',
+          borderRadius: 10,
+          border: '1px solid var(--dd-line-2)',
+          background: 'var(--dd-surface-3)',
+          cursor: 'pointer',
+          color: 'var(--dd-text-2)',
+          width: 160,
+          transition: 'border-color 100ms ease, background 100ms ease',
+          fontFamily: 'inherit',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.borderColor = 'var(--dd-blue)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.borderColor = 'var(--dd-line-2)';
+        }}
+      >
+        <Icon name="add_circle" size={24} style={{ color: 'var(--dd-green)' }} />
+        <div style={{ fontSize: 12, fontWeight: 600 }}>Add your first service</div>
+        <div style={{ fontSize: 11, color: 'var(--dd-text-4)', textAlign: 'center' }}>
+          Configure a new service manually
+        </div>
+      </button>
     </div>
   );
 }
@@ -1292,6 +1035,24 @@ function RadioOption({
   );
 }
 
+// ── Inline Spinner ────────────────────────────────────────────────────────
+
+function SmallSpinner({ color }: { color?: string }) {
+  return (
+    <span
+      style={{
+        display: 'inline-block',
+        width: 12,
+        height: 12,
+        border: `1.5px solid ${color ? color + '33' : 'var(--dd-text-4)'}`,
+        borderTopColor: color || 'var(--dd-text-2)',
+        borderRadius: '50%',
+        animation: 'dd-spin 0.7s linear infinite',
+      }}
+    />
+  );
+}
+
 // ── Main Services Page ────────────────────────────────────────────────────
 
 export default function Services() {
@@ -1303,13 +1064,33 @@ export default function Services() {
   const { processes } = useProcesses();
 
   const [activeGroup, setActiveGroup] = useState<string | null>(null);
-  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
-  const [expandedServiceId, setExpandedServiceId] = useState<string | null>(null);
+  const [sidebarSearch, setSidebarSearch] = useState('');
+  const [highlightedServiceId, setHighlightedServiceId] = useState<string | null>(null);
   const [showAddService, setShowAddService] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [logServiceId, setLogServiceId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [actionLoading, setActionLoading] = useState<Map<string, string>>(new Map());
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [bulkLoading, setBulkLoading] = useState<string | null>(null);
 
-  // Filter services by active group
+  const tableRef = useRef<HTMLDivElement>(null);
+
+  // ── Toast helpers ──
+  const addToast = useCallback((message: string, type: Toast['type']) => {
+    const id = `toast-${++toastCounter}`;
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3000);
+  }, []);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  // ── Filter services by active group ──
   const filteredServices =
     activeGroup === null
       ? services
@@ -1321,31 +1102,90 @@ export default function Services() {
   const healthyCount = services.filter((s) => s.status === 'healthy').length;
   const activeRuns = processes.filter((p) => p.status === 'running').length;
 
+  // Filtered IDs set for select-all
+  const filteredIds = new Set(filteredServices.map((s) => s.id));
+  const selectedInView = new Set([...selectedIds].filter((id) => filteredIds.has(id)));
+  const allFilteredSelected = filteredServices.length > 0 && selectedInView.size === filteredServices.length;
+
+  // ── Action loading helpers ──
+  function setActionLoadingKey(key: string, action: string) {
+    setActionLoading((prev) => new Map(prev).set(key, action));
+  }
+  function clearActionLoadingKey(key: string) {
+    setActionLoading((prev) => {
+      const next = new Map(prev);
+      next.delete(key);
+      return next;
+    });
+  }
+
   // ── Handlers ──
 
   async function handleServiceAction(action: 'start' | 'stop' | 'restart', id: string) {
+    const svc = services.find((s) => s.id === id);
+    const svcName = svc?.name ?? id;
+    const key = `${id}-${action}`;
+    setActionLoadingKey(key, action);
+    addToast(`${action === 'start' ? 'Starting' : action === 'stop' ? 'Stopping' : 'Restarting'} ${svcName}...`, 'info');
     try {
       if (action === 'start') await api.startService(id);
       else if (action === 'stop') await api.stopService(id);
       else await api.restartService(id);
+      addToast(`${svcName} ${action === 'start' ? 'started' : action === 'stop' ? 'stopped' : 'restarted'}`, 'success');
     } catch (e) {
-      console.error(`Failed to ${action} service:`, e);
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      addToast(`Failed to ${action} ${svcName}: ${msg}`, 'error');
+    } finally {
+      setTimeout(() => clearActionLoadingKey(key), 2000);
     }
   }
 
+  async function handleBulkAction(action: 'start' | 'stop') {
+    const ids = [...selectedInView];
+    if (ids.length === 0) return;
+    setBulkLoading(action);
+    addToast(`${action === 'start' ? 'Starting' : 'Stopping'} ${ids.length} services...`, 'info');
+    let successes = 0;
+    let failures = 0;
+    for (const id of ids) {
+      try {
+        if (action === 'start') await api.startService(id);
+        else await api.stopService(id);
+        successes++;
+      } catch {
+        failures++;
+      }
+    }
+    if (failures > 0) {
+      addToast(`${action === 'start' ? 'Started' : 'Stopped'} ${successes}/${ids.length} (${failures} failed)`, 'error');
+    } else {
+      addToast(`${action === 'start' ? 'Started' : 'Stopped'} ${successes} services`, 'success');
+    }
+    setSelectedIds(new Set());
+    setBulkLoading(null);
+  }
+
   async function handleGroupStart(id: string) {
+    const grp = groups.find((g) => g.id === id);
+    addToast(`Starting group ${grp?.name ?? id}...`, 'info');
     try {
       await api.startServiceGroup(id);
+      addToast(`Group ${grp?.name ?? id} started`, 'success');
     } catch (e) {
-      console.error('Failed to start group:', e);
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      addToast(`Failed to start group: ${msg}`, 'error');
     }
   }
 
   async function handleGroupStop(id: string) {
+    const grp = groups.find((g) => g.id === id);
+    addToast(`Stopping group ${grp?.name ?? id}...`, 'info');
     try {
       await api.stopServiceGroup(id);
+      addToast(`Group ${grp?.name ?? id} stopped`, 'success');
     } catch (e) {
-      console.error('Failed to stop group:', e);
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      addToast(`Failed to stop group: ${msg}`, 'error');
     }
   }
 
@@ -1354,13 +1194,16 @@ export default function Services() {
       if (editingService) {
         await api.updateService(editingService.id, data);
         setEditingService(null);
+        addToast(`${data.name} updated`, 'success');
       } else {
         await api.createService(data);
         setShowAddService(false);
+        addToast(`${data.name} added`, 'success');
       }
       await refreshServices();
     } catch (e) {
-      console.error('Failed to save service:', e);
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      addToast(`Failed to save service: ${msg}`, 'error');
     }
   }
 
@@ -1373,9 +1216,11 @@ export default function Services() {
     if (!window.confirm(`Delete ${service.name}?`)) return;
     try {
       await api.deleteService(service.id);
+      addToast(`${service.name} deleted`, 'success');
       await refreshServices();
     } catch (e) {
-      console.error('Failed to delete service:', e);
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      addToast(`Failed to delete: ${msg}`, 'error');
     }
   }
 
@@ -1383,9 +1228,11 @@ export default function Services() {
     try {
       await api.createServiceGroup(data);
       setShowCreateGroup(false);
+      addToast(`Group "${data.name}" created`, 'success');
       await refreshGroups();
     } catch (e) {
-      console.error('Failed to create group:', e);
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      addToast(`Failed to create group: ${msg}`, 'error');
     }
   }
 
@@ -1393,20 +1240,55 @@ export default function Services() {
     if (!window.confirm(`Delete group "${group.name}"?`)) return;
     try {
       await api.deleteServiceGroup(group.id);
+      addToast(`Group "${group.name}" deleted`, 'success');
+      if (activeGroup === group.id) setActiveGroup(null);
       await refreshGroups();
     } catch (e) {
-      console.error('Failed to delete group:', e);
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      addToast(`Failed to delete group: ${msg}`, 'error');
     }
   }
 
-
-  function handleSelectService(id: string) {
-    setSelectedServiceId(id);
-    setExpandedServiceId(id);
+  function handleSidebarSelect(id: string) {
+    setHighlightedServiceId(id);
+    // Scroll the service row into view
+    setTimeout(() => {
+      const row = document.getElementById(`svc-row-${id}`);
+      if (row) {
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        row.style.background = 'rgba(96,165,250,0.08)';
+        setTimeout(() => {
+          row.style.background = '';
+        }, 1500);
+      }
+    }, 50);
   }
 
-  function handleToggleExpand(id: string) {
-    setExpandedServiceId((prev) => (prev === id ? null : id));
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (allFilteredSelected) {
+      // Deselect all filtered
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const id of filteredIds) next.delete(id);
+        return next;
+      });
+    } else {
+      // Select all filtered
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const id of filteredIds) next.add(id);
+        return next;
+      });
+    }
   }
 
   // Titlebar
@@ -1415,6 +1297,7 @@ export default function Services() {
     : 'Services';
 
   const showServiceModal = showAddService || editingService !== null;
+  const logService = logServiceId ? services.find((s) => s.id === logServiceId) : null;
 
   return (
     <div className="dd" style={{ width: '100%', height: '100%' }}>
@@ -1423,12 +1306,10 @@ export default function Services() {
 
         <ServicesSidebar
           services={services}
-          groups={groups}
-          activeGroup={activeGroup}
-          selectedServiceId={selectedServiceId}
-          onSelectGroup={setActiveGroup}
-          onSelectService={handleSelectService}
-          onNewGroup={() => setShowCreateGroup(true)}
+          search={sidebarSearch}
+          onSearchChange={setSidebarSearch}
+          highlightedServiceId={highlightedServiceId}
+          onSelectService={handleSidebarSelect}
         />
 
         <main
@@ -1452,79 +1333,164 @@ export default function Services() {
             >
               Loading services...
             </div>
+          ) : services.length === 0 ? (
+            <EmptyState onAddService={() => setShowAddService(true)} />
           ) : (
-            <div style={{ flex: 1, overflow: 'auto' }}>
-              {/* Page header — only shown when services exist */}
-              {services.length > 0 && (
-                <div className="pg-head" style={{ marginBottom: 0 }}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 16,
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <h1
-                        style={{
-                          fontSize: 18,
-                          fontWeight: 600,
-                          color: 'var(--dd-text)',
-                        }}
-                      >
-                        Services
-                      </h1>
-                      <span
-                        className="badge"
-                        style={{
-                          background: statusBg(
-                            healthyCount === services.length
-                              ? 'healthy'
-                              : healthyCount === 0
-                                ? 'down'
-                                : 'degraded'
-                          ),
-                          color: statusColor(
-                            healthyCount === services.length
-                              ? 'healthy'
-                              : healthyCount === 0
-                                ? 'down'
-                                : 'degraded'
-                          ),
-                          borderColor: statusBorder(
-                            healthyCount === services.length
-                              ? 'healthy'
-                              : healthyCount === 0
-                                ? 'down'
-                                : 'degraded'
-                          ),
-                        }}
-                      >
-                        <span className="dot" />
-                        {healthyCount}/{services.length} healthy
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                      <button
-                        className="btn btn-primary"
-                        onClick={() => setShowAddService(true)}
-                      >
-                        <Icon name="add" size={14} />
-                        Add service
-                      </button>
-                    </div>
+            <div style={{ flex: 1, overflow: 'auto' }} ref={tableRef}>
+              {/* Header bar */}
+              <div className="pg-head" style={{ marginBottom: 0 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 16,
+                    marginBottom: 12,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <h1
+                      style={{
+                        fontSize: 18,
+                        fontWeight: 600,
+                        color: 'var(--dd-text)',
+                      }}
+                    >
+                      Services
+                    </h1>
+                    <span
+                      className="badge"
+                      style={{
+                        background: statusBg(
+                          healthyCount === services.length
+                            ? 'healthy'
+                            : healthyCount === 0
+                              ? 'down'
+                              : 'degraded'
+                        ),
+                        color: statusColor(
+                          healthyCount === services.length
+                            ? 'healthy'
+                            : healthyCount === 0
+                              ? 'down'
+                              : 'degraded'
+                        ),
+                        borderColor: statusBorder(
+                          healthyCount === services.length
+                            ? 'healthy'
+                            : healthyCount === 0
+                              ? 'down'
+                              : 'degraded'
+                        ),
+                      }}
+                    >
+                      <span className="dot" />
+                      {healthyCount}/{services.length} healthy
+                    </span>
                   </div>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => setShowCreateGroup(true)}
+                    >
+                      <Icon name="create_new_folder" size={14} />
+                      New group
+                    </button>
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => setShowAddService(true)}
+                    >
+                      <Icon name="add" size={14} />
+                      Add service
+                    </button>
+                  </div>
+                </div>
+
+                {/* Group filter pills */}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <FilterPill
+                    label="All"
+                    count={services.length}
+                    active={activeGroup === null}
+                    onClick={() => setActiveGroup(null)}
+                  />
+                  {groups.map((g) => {
+                    const members = services.filter((s) => g.service_ids.includes(s.id));
+                    return (
+                      <FilterPill
+                        key={g.id}
+                        label={g.name}
+                        count={members.length}
+                        active={activeGroup === g.id}
+                        onClick={() => setActiveGroup(g.id)}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Bulk action bar */}
+              {selectedInView.size > 0 && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '8px 24px',
+                    background: 'rgba(96,165,250,0.06)',
+                    borderBottom: '1px solid var(--dd-line)',
+                    fontSize: 12,
+                  }}
+                >
+                  <span style={{ fontWeight: 600, color: 'var(--dd-blue)' }}>
+                    {selectedInView.size} selected
+                  </span>
+                  <button
+                    className="btn btn-sm"
+                    style={{
+                      color: 'var(--dd-green)',
+                      background: 'var(--dd-surface-3)',
+                      borderColor: 'var(--dd-line-2)',
+                    }}
+                    disabled={bulkLoading !== null}
+                    onClick={() => handleBulkAction('start')}
+                  >
+                    {bulkLoading === 'start' ? (
+                      <SmallSpinner color="var(--dd-green)" />
+                    ) : (
+                      <Icon name="play_arrow" size={13} />
+                    )}
+                    Start selected
+                  </button>
+                  <button
+                    className="btn btn-sm"
+                    style={{
+                      color: 'var(--dd-red)',
+                      background: 'var(--dd-surface-3)',
+                      borderColor: 'var(--dd-line-2)',
+                    }}
+                    disabled={bulkLoading !== null}
+                    onClick={() => handleBulkAction('stop')}
+                  >
+                    {bulkLoading === 'stop' ? (
+                      <SmallSpinner color="var(--dd-red)" />
+                    ) : (
+                      <Icon name="stop" size={13} />
+                    )}
+                    Stop selected
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setSelectedIds(new Set())}
+                  >
+                    Deselect all
+                  </button>
                 </div>
               )}
 
-              {/* Service cards or empty state */}
-              <div style={{ padding: services.length > 0 ? '16px 24px' : '0' }}>
-                {services.length === 0 ? (
-                  <EmptyState
-                    onAddService={() => setShowAddService(true)}
-                  />
-                ) : filteredServices.length === 0 ? (
+              {/* Service table */}
+              <div style={{ padding: '0 24px 16px' }}>
+                {filteredServices.length === 0 ? (
                   <div
                     style={{
                       display: 'flex',
@@ -1536,11 +1502,7 @@ export default function Services() {
                       color: 'var(--dd-text-4)',
                     }}
                   >
-                    <Icon
-                      name="dns"
-                      size={40}
-                      style={{ color: 'var(--dd-line-2)' }}
-                    />
+                    <Icon name="dns" size={40} style={{ color: 'var(--dd-line-2)' }} />
                     <div
                       style={{
                         fontSize: 14,
@@ -1552,25 +1514,273 @@ export default function Services() {
                     </div>
                   </div>
                 ) : (
-                  <div
-                    style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
-                  >
-                    {filteredServices.map((svc) => (
-                      <ServiceCard
-                        key={svc.id}
-                        service={svc}
-                        expanded={expandedServiceId === svc.id}
-                        onToggle={() => handleToggleExpand(svc.id)}
-                        onAction={handleServiceAction}
-                        onEdit={(s) => setEditingService(s)}
-                        onDelete={handleDeleteService}
-                      />
-                    ))}
+                  <table className="dd-table" style={{ marginTop: 12 }}>
+                    <thead>
+                      <tr>
+                        <th style={{ width: 36, padding: '8px 10px' }}>
+                          <input
+                            type="checkbox"
+                            checked={allFilteredSelected}
+                            onChange={toggleSelectAll}
+                            style={{ accentColor: 'var(--dd-blue)' }}
+                          />
+                        </th>
+                        <th style={{ width: 60 }}>Status</th>
+                        <th>Name</th>
+                        <th style={{ width: 80 }}>Port</th>
+                        <th style={{ width: 80 }}>Category</th>
+                        <th>Health Detail</th>
+                        <th style={{ width: 90 }}>Uptime</th>
+                        <th style={{ width: 190 }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredServices.map((svc) => {
+                        const isHealthy = svc.status === 'healthy';
+                        const isDown = svc.status === 'down';
+                        const startKey = `${svc.id}-start`;
+                        const stopKey = `${svc.id}-stop`;
+                        const restartKey = `${svc.id}-restart`;
+                        const anyLoading =
+                          actionLoading.has(startKey) ||
+                          actionLoading.has(stopKey) ||
+                          actionLoading.has(restartKey);
+
+                        return (
+                          <tr
+                            key={svc.id}
+                            id={`svc-row-${svc.id}`}
+                            style={{
+                              transition: 'background 300ms ease',
+                            }}
+                          >
+                            {/* Checkbox */}
+                            <td style={{ padding: '10px 10px' }}>
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.has(svc.id)}
+                                onChange={() => toggleSelect(svc.id)}
+                                style={{ accentColor: 'var(--dd-blue)' }}
+                              />
+                            </td>
+
+                            {/* Status dot */}
+                            <td>
+                              <div
+                                style={{
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: '50%',
+                                  background: statusColor(svc.status),
+                                  boxShadow: `0 0 0 3px ${statusBg(svc.status)}`,
+                                  display: 'inline-block',
+                                }}
+                              />
+                            </td>
+
+                            {/* Name */}
+                            <td>
+                              <span style={{ fontWeight: 600, color: 'var(--dd-text)' }}>
+                                {svc.name}
+                              </span>
+                            </td>
+
+                            {/* Port */}
+                            <td>
+                              <span className="mono" style={{ fontSize: 12 }}>
+                                :{svc.port}
+                              </span>
+                            </td>
+
+                            {/* Category */}
+                            <td>
+                              <span
+                                className="badge"
+                                style={{
+                                  background: statusBg(svc.status),
+                                  color: statusColor(svc.status),
+                                  borderColor: statusBorder(svc.status),
+                                  fontSize: 10,
+                                  padding: '1px 6px',
+                                }}
+                              >
+                                {svc.category}
+                              </span>
+                            </td>
+
+                            {/* Health detail */}
+                            <td>
+                              <span
+                                className="mono"
+                                style={{
+                                  fontSize: 11,
+                                  color: isDown ? 'var(--dd-red)' : 'var(--dd-text-3)',
+                                }}
+                              >
+                                {svc.detail || (isDown ? 'unreachable' : '--')}
+                              </span>
+                            </td>
+
+                            {/* Uptime */}
+                            <td>
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  color: isDown ? 'var(--dd-red)' : 'var(--dd-text-3)',
+                                  fontWeight: isDown ? 600 : 400,
+                                }}
+                              >
+                                {isHealthy || svc.status === 'degraded'
+                                  ? formatUptime(svc.uptime_since)
+                                  : 'down'}
+                              </span>
+                            </td>
+
+                            {/* Actions */}
+                            <td>
+                              <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                                {/* Start */}
+                                {!isHealthy && (
+                                  <button
+                                    className="btn btn-sm"
+                                    style={{
+                                      color: 'var(--dd-green)',
+                                      background: actionLoading.has(startKey)
+                                        ? 'rgba(52,211,153,0.15)'
+                                        : 'var(--dd-surface-3)',
+                                      borderColor: 'var(--dd-line-2)',
+                                      padding: '3px 6px',
+                                    }}
+                                    disabled={anyLoading}
+                                    onClick={() => handleServiceAction('start', svc.id)}
+                                    title="Start"
+                                  >
+                                    {actionLoading.has(startKey) ? (
+                                      <SmallSpinner color="var(--dd-green)" />
+                                    ) : (
+                                      <Icon name="play_arrow" size={13} />
+                                    )}
+                                  </button>
+                                )}
+
+                                {/* Stop */}
+                                {isHealthy && (
+                                  <button
+                                    className="btn btn-sm"
+                                    style={{
+                                      color: 'var(--dd-red)',
+                                      background: actionLoading.has(stopKey)
+                                        ? 'rgba(248,113,113,0.15)'
+                                        : 'var(--dd-surface-3)',
+                                      borderColor: 'var(--dd-line-2)',
+                                      padding: '3px 6px',
+                                    }}
+                                    disabled={anyLoading}
+                                    onClick={() => handleServiceAction('stop', svc.id)}
+                                    title="Stop"
+                                  >
+                                    {actionLoading.has(stopKey) ? (
+                                      <SmallSpinner color="var(--dd-red)" />
+                                    ) : (
+                                      <Icon name="stop" size={13} />
+                                    )}
+                                  </button>
+                                )}
+
+                                {/* Restart */}
+                                <button
+                                  className="btn btn-sm"
+                                  style={{
+                                    color: 'var(--dd-amber)',
+                                    background: actionLoading.has(restartKey)
+                                      ? 'rgba(251,191,36,0.15)'
+                                      : 'var(--dd-surface-3)',
+                                    borderColor: 'var(--dd-line-2)',
+                                    padding: '3px 6px',
+                                    opacity: isDown ? 0.4 : 1,
+                                  }}
+                                  disabled={anyLoading || isDown}
+                                  onClick={() => handleServiceAction('restart', svc.id)}
+                                  title="Restart"
+                                >
+                                  {actionLoading.has(restartKey) ? (
+                                    <SmallSpinner color="var(--dd-amber)" />
+                                  ) : (
+                                    <Icon name="refresh" size={13} />
+                                  )}
+                                </button>
+
+                                {/* Divider */}
+                                <div
+                                  style={{
+                                    width: 1,
+                                    height: 18,
+                                    background: 'var(--dd-line-2)',
+                                    margin: '0 2px',
+                                  }}
+                                />
+
+                                {/* Edit */}
+                                <button
+                                  className="btn btn-ghost btn-sm"
+                                  onClick={() => setEditingService(svc)}
+                                  title="Edit"
+                                  style={{ padding: '3px 5px' }}
+                                >
+                                  <Icon name="edit" size={13} />
+                                </button>
+
+                                {/* Logs */}
+                                <button
+                                  className="btn btn-ghost btn-sm"
+                                  onClick={() =>
+                                    setLogServiceId((prev) =>
+                                      prev === svc.id ? null : svc.id
+                                    )
+                                  }
+                                  title="Logs"
+                                  style={{
+                                    padding: '3px 5px',
+                                    color:
+                                      logServiceId === svc.id
+                                        ? 'var(--dd-blue)'
+                                        : undefined,
+                                  }}
+                                >
+                                  <Icon name="terminal" size={13} />
+                                </button>
+
+                                {/* Delete */}
+                                <button
+                                  className="btn btn-ghost btn-sm"
+                                  onClick={() => handleDeleteService(svc)}
+                                  title="Delete"
+                                  style={{ padding: '3px 5px', color: 'var(--dd-red)' }}
+                                >
+                                  <Icon name="delete" size={13} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+
+                {/* Log panel */}
+                {logService && (
+                  <div style={{ marginTop: 8, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--dd-line)' }}>
+                    <LogPanel
+                      serviceId={logService.id}
+                      serviceName={logService.name}
+                      onClose={() => setLogServiceId(null)}
+                    />
                   </div>
                 )}
 
                 {/* Groups section */}
-                {groups.length > 0 && services.length > 0 && (
+                {groups.length > 0 && (
                   <div style={{ marginTop: 24 }}>
                     <div
                       style={{
@@ -1601,7 +1811,7 @@ export default function Services() {
                     <div
                       style={{
                         display: 'flex',
-                        flexDirection: 'column',
+                        flexWrap: 'wrap',
                         gap: 8,
                       }}
                     >
@@ -1659,6 +1869,52 @@ export default function Services() {
           onCancel={() => setShowCreateGroup(false)}
         />
       )}
+
+      {/* Toasts */}
+      <Toasts toasts={toasts} onDismiss={dismissToast} />
     </div>
+  );
+}
+
+// ── Filter Pill ───────────────────────────────────────────────────────────
+
+function FilterPill({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+        padding: '4px 10px',
+        borderRadius: 9999,
+        border: `1px solid ${active ? 'var(--dd-blue)' : 'var(--dd-line-2)'}`,
+        background: active ? 'rgba(96,165,250,0.10)' : 'var(--dd-surface-3)',
+        color: active ? 'var(--dd-blue)' : 'var(--dd-text-2)',
+        cursor: 'pointer',
+        fontSize: 12,
+        fontWeight: 500,
+        fontFamily: 'inherit',
+        transition: 'all 120ms ease',
+      }}
+    >
+      {label}
+      <span
+        className="mono"
+        style={{ fontSize: 10, opacity: 0.7 }}
+      >
+        {count}
+      </span>
+    </button>
   );
 }
