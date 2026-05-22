@@ -89,18 +89,13 @@ export function servicesRouter(
 
     res.status(202).json({ started: true, group_id: group.id });
 
-    // Start services sequentially in background
-    (async () => {
-      for (const serviceId of group.service_ids) {
-        const service = db.getService(serviceId);
-        if (!service?.start_command) continue;
-        try {
-          await pm.spawn({ command: service.start_command, type: "shell" });
-        } catch {
-          // Continue to next service on error
-        }
-      }
-    })().catch(() => undefined);
+    // Start services in background
+    for (const serviceId of group.service_ids) {
+      const service = db.getService(serviceId);
+      if (!service?.start_command) continue;
+      const cmd = `bash -l -c '${service.start_command.replace(/'/g, "'\\''")}'`;
+      pm.spawnBackground({ command: cmd, type: "long-running" });
+    }
   });
 
   // ─── POST /groups/:id/stop ────────────────────────────────────────────────────
@@ -296,7 +291,10 @@ export function servicesRouter(
       return;
     }
 
-    pm.spawn({ command: service.start_command, type: "shell" }).catch(() => undefined);
+    // Use spawnBackground for long-running services (servers, daemons)
+    // Wrap in login shell so rbenv/nvm/sdkman are loaded
+    const cmd = `bash -l -c '${service.start_command.replace(/'/g, "'\\''")}'`;
+    pm.spawnBackground({ command: cmd, type: "long-running" });
 
     res.status(202).json({ started: true });
   });
