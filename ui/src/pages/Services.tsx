@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Titlebar, StatusBar } from '../components';
 import Icon from '../components/Icon';
+import { DialogModal } from '../components/DialogModal';
 import { useServices } from '../hooks/useServices';
 import { useServiceGroups } from '../hooks/useServiceGroups';
-import { useProcesses } from '../hooks/useProcesses';
 import type {
   Service,
   ServiceGroup,
@@ -34,6 +33,13 @@ function statusBorder(status?: ServiceStatusType): string {
   if (status === 'down') return 'rgba(248,113,113,0.20)';
   if (status === 'degraded') return 'rgba(251,191,36,0.22)';
   return 'rgba(113,113,122,0.18)';
+}
+
+function statusLabel(status?: ServiceStatusType): string {
+  if (status === 'healthy') return 'Healthy';
+  if (status === 'down') return 'Down';
+  if (status === 'degraded') return 'Degraded';
+  return 'Unknown';
 }
 
 function formatUptime(since?: string): string {
@@ -139,169 +145,7 @@ function Toasts({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: string
   );
 }
 
-// ── Sidebar (simple service list) ────────────────────────────────────────
-
-interface SidebarProps {
-  services: Service[];
-  search: string;
-  onSearchChange: (v: string) => void;
-  highlightedServiceId: string | null;
-  onSelectService: (id: string) => void;
-}
-
-function ServicesSidebar({
-  services,
-  search,
-  onSearchChange,
-  highlightedServiceId,
-  onSelectService,
-}: SidebarProps) {
-  const filtered = services.filter((s) =>
-    s.name.toLowerCase().includes(search.toLowerCase())
-  );
-
-  return (
-    <div
-      style={{
-        gridArea: 'side',
-        width: 240,
-        background: 'var(--dd-surface)',
-        borderRight: '1px solid var(--dd-line)',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Search */}
-      <div style={{ padding: '10px 8px 6px', flexShrink: 0 }}>
-        <div style={{ position: 'relative' }}>
-          <Icon
-            name="search"
-            size={14}
-            style={{
-              position: 'absolute',
-              left: 8,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              color: 'var(--dd-text-4)',
-              pointerEvents: 'none',
-            }}
-          />
-          <input
-            className="input"
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search services..."
-            style={{ paddingLeft: 28, fontSize: 12, padding: '5px 8px 5px 28px' }}
-          />
-        </div>
-      </div>
-
-      {/* Services header */}
-      <div style={{ padding: '6px 10px 4px', flexShrink: 0 }}>
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 500,
-            color: 'var(--dd-text-4)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.06em',
-          }}
-        >
-          Services ({filtered.length})
-        </span>
-      </div>
-
-      {/* Service list */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0 6px 6px' }}>
-        {filtered.length === 0 && (
-          <div
-            style={{
-              padding: '12px 8px',
-              fontSize: 12,
-              color: 'var(--dd-text-4)',
-              textAlign: 'center',
-            }}
-          >
-            {search ? 'No matches' : 'No services'}
-          </div>
-        )}
-        {filtered.map((svc) => {
-          const isActive = svc.id === highlightedServiceId;
-          return (
-            <button
-              key={svc.id}
-              onClick={() => onSelectService(svc.id)}
-              style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '5px 8px',
-                borderRadius: 5,
-                border: 'none',
-                background: isActive ? 'rgba(96,165,250,0.08)' : 'transparent',
-                borderLeft: isActive
-                  ? '2px solid var(--dd-blue)'
-                  : '2px solid transparent',
-                color: isActive ? 'var(--dd-text)' : 'var(--dd-text-2)',
-                cursor: 'pointer',
-                textAlign: 'left',
-                fontSize: 12,
-                fontFamily: 'inherit',
-                marginBottom: 1,
-                transition: 'background 100ms ease',
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive)
-                  (e.currentTarget as HTMLButtonElement).style.background =
-                    'var(--dd-surface-3)';
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive)
-                  (e.currentTarget as HTMLButtonElement).style.background =
-                    'transparent';
-              }}
-            >
-              {/* Status dot */}
-              <div
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: statusColor(svc.status),
-                  flexShrink: 0,
-                }}
-              />
-              <span
-                style={{
-                  flex: 1,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {svc.name}
-              </span>
-              <span
-                className="mono"
-                style={{
-                  fontSize: 10,
-                  color: 'var(--dd-text-4)',
-                  flexShrink: 0,
-                }}
-              >
-                :{svc.port}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ── Log Panel ─────────────────────────────────────────────────────────────
+// ── Log Panel (slide-up from bottom) ─────────────────────────────────────
 
 function LogPanel({ serviceId, serviceName, onClose }: { serviceId: string; serviceName: string; onClose: () => void }) {
   const [lines, setLines] = useState<string[]>([]);
@@ -335,8 +179,15 @@ function LogPanel({ serviceId, serviceName, onClose }: { serviceId: string; serv
   return (
     <div
       style={{
-        borderTop: '1px solid var(--dd-line)',
+        position: 'fixed',
+        bottom: 28,
+        left: 0,
+        right: 0,
+        zIndex: 90,
         background: 'var(--dd-surface)',
+        borderTop: '1px solid var(--dd-line)',
+        boxShadow: '0 -8px 32px rgba(0,0,0,0.25)',
+        animation: 'dd-slide-up 200ms ease',
       }}
     >
       <div
@@ -344,39 +195,40 @@ function LogPanel({ serviceId, serviceName, onClose }: { serviceId: string; serv
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '6px 14px',
-          background: 'var(--dd-surface-3)',
+          padding: '8px 20px',
+          background: 'var(--dd-surface-2)',
+          borderBottom: '1px solid var(--dd-line)',
         }}
       >
         <span
           style={{
-            fontSize: 11,
-            fontWeight: 500,
-            color: 'var(--dd-text-3)',
+            fontSize: 12,
+            fontWeight: 600,
+            color: 'var(--dd-text-2)',
             display: 'flex',
             alignItems: 'center',
-            gap: 6,
+            gap: 8,
           }}
         >
-          <Icon name="terminal" size={13} />
+          <Icon name="terminal" size={14} style={{ color: 'var(--dd-text-3)' }} />
           Logs: {serviceName}
         </span>
         <div style={{ display: 'flex', gap: 6 }}>
           <button
             className="btn btn-ghost btn-sm"
             onClick={fetchLogs}
-            style={{ padding: '2px 6px', fontSize: 11 }}
+            style={{ padding: '3px 8px', fontSize: 11 }}
+            title="Refresh logs"
           >
-            <Icon name="refresh" size={12} />
-            Refresh
+            <Icon name="refresh" size={13} />
           </button>
           <button
             className="btn btn-ghost btn-sm"
             onClick={onClose}
-            style={{ padding: '2px 6px', fontSize: 11 }}
+            style={{ padding: '3px 8px', fontSize: 11 }}
+            title="Close logs"
           >
-            <Icon name="close" size={12} />
-            Close
+            <Icon name="close" size={13} />
           </button>
         </div>
       </div>
@@ -384,11 +236,11 @@ function LogPanel({ serviceId, serviceName, onClose }: { serviceId: string; serv
         ref={containerRef}
         className="terminal"
         style={{
-          maxHeight: 260,
+          maxHeight: 280,
           overflowY: 'auto',
           borderRadius: 0,
           border: 'none',
-          borderTop: '1px solid var(--dd-line)',
+          margin: 0,
         }}
       >
         {loading ? (
@@ -410,7 +262,7 @@ function LogPanel({ serviceId, serviceName, onClose }: { serviceId: string; serv
   );
 }
 
-// ── Group Card (for groups section below table) ──────────────────────────
+// ── Group Card (compact horizontal strip) ──────────────────────────────
 
 interface GroupCardProps {
   group: ServiceGroup;
@@ -435,60 +287,93 @@ function GroupCard({ group, services, onStartAll, onStopAll, onDelete }: GroupCa
     }
   }
 
+  const allHealthy = healthy === members.length && members.length > 0;
+  const noneHealthy = healthy === 0 && members.length > 0;
+
   return (
     <div
       style={{
-        display: 'inline-flex',
+        display: 'flex',
         alignItems: 'center',
-        gap: 8,
-        padding: '6px 12px',
-        borderRadius: 8,
-        background: 'var(--dd-surface-2)',
+        gap: 12,
+        padding: '10px 16px',
+        borderRadius: 10,
+        background: 'var(--dd-surface)',
         border: '1px solid var(--dd-line)',
-        fontSize: 12,
+        minWidth: 220,
+        flexShrink: 0,
       }}
     >
-      <Icon name="folder" size={14} style={{ color: 'var(--dd-text-3)' }} />
-      <span style={{ fontWeight: 600, color: 'var(--dd-text)' }}>{group.name}</span>
-      <span className="mono" style={{ fontSize: 10, color: 'var(--dd-text-4)' }}>
-        {healthy}/{members.length}
-      </span>
-      <button
-        className="btn btn-sm"
+      <div
         style={{
-          color: 'var(--dd-green)',
-          background: loading === 'start' ? 'rgba(52,211,153,0.15)' : 'var(--dd-surface-3)',
-          borderColor: 'var(--dd-line-2)',
-          padding: '2px 6px',
+          width: 36,
+          height: 36,
+          borderRadius: 8,
+          background: 'var(--dd-surface-2)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
         }}
-        disabled={loading !== null}
-        onClick={() => handleAction('start')}
-        title="Start all"
       >
-        <Icon name="play_arrow" size={12} />
-      </button>
-      <button
-        className="btn btn-sm"
-        style={{
-          color: 'var(--dd-red)',
-          background: loading === 'stop' ? 'rgba(248,113,113,0.15)' : 'var(--dd-surface-3)',
-          borderColor: 'var(--dd-line-2)',
-          padding: '2px 6px',
-        }}
-        disabled={loading !== null}
-        onClick={() => handleAction('stop')}
-        title="Stop all"
-      >
-        <Icon name="stop" size={12} />
-      </button>
-      <button
-        className="btn btn-ghost btn-sm"
-        onClick={() => onDelete(group)}
-        title="Delete group"
-        style={{ padding: '2px 4px', color: 'var(--dd-red)' }}
-      >
-        <Icon name="delete" size={12} />
-      </button>
+        <Icon name="folder" size={18} style={{ color: 'var(--dd-text-3)' }} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--dd-text)', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {group.name}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span
+            style={{
+              fontSize: 11,
+              color: allHealthy ? 'var(--dd-green)' : noneHealthy ? 'var(--dd-red)' : 'var(--dd-amber)',
+              fontWeight: 500,
+            }}
+          >
+            {healthy}/{members.length} healthy
+          </span>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+        <button
+          className="btn btn-sm"
+          style={{
+            color: 'var(--dd-green)',
+            background: loading === 'start' ? 'rgba(52,211,153,0.15)' : 'var(--dd-surface-2)',
+            borderColor: 'var(--dd-line)',
+            padding: '4px 7px',
+            borderRadius: 6,
+          }}
+          disabled={loading !== null}
+          onClick={() => handleAction('start')}
+          title="Start all"
+        >
+          <Icon name="play_arrow" size={14} />
+        </button>
+        <button
+          className="btn btn-sm"
+          style={{
+            color: 'var(--dd-red)',
+            background: loading === 'stop' ? 'rgba(248,113,113,0.15)' : 'var(--dd-surface-2)',
+            borderColor: 'var(--dd-line)',
+            padding: '4px 7px',
+            borderRadius: 6,
+          }}
+          disabled={loading !== null}
+          onClick={() => handleAction('stop')}
+          title="Stop all"
+        >
+          <Icon name="stop" size={14} />
+        </button>
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => onDelete(group)}
+          title="Delete group"
+          style={{ padding: '4px 5px', color: 'var(--dd-text-4)' }}
+        >
+          <Icon name="delete" size={13} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -1053,6 +938,69 @@ function SmallSpinner({ color }: { color?: string }) {
   );
 }
 
+// ── Stat Card ─────────────────────────────────────────────────────────────
+
+function StatCard({ label, value, borderColor }: { label: string; value: number; borderColor: string }) {
+  return (
+    <div
+      style={{
+        flex: 1,
+        minWidth: 120,
+        padding: '14px 18px',
+        background: 'var(--dd-surface)',
+        borderRadius: 10,
+        border: '1px solid var(--dd-line)',
+        borderLeft: `3px solid ${borderColor}`,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
+      }}
+    >
+      <span style={{ fontSize: 22, fontWeight: 700, color: 'var(--dd-text)', lineHeight: 1.1 }}>
+        {value}
+      </span>
+      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--dd-text-4)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+// ── Status Badge ──────────────────────────────────────────────────────────
+
+function StatusBadge({ status, detail }: { status?: ServiceStatusType; detail?: string }) {
+  return (
+    <span
+      title={detail || undefined}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
+        padding: '3px 10px',
+        borderRadius: 9999,
+        fontSize: 11,
+        fontWeight: 600,
+        background: statusBg(status),
+        color: statusColor(status),
+        border: `1px solid ${statusBorder(status)}`,
+        cursor: detail ? 'help' : undefined,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <div
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: '50%',
+          background: statusColor(status),
+          flexShrink: 0,
+        }}
+      />
+      {statusLabel(status)}
+    </span>
+  );
+}
+
 // ── Main Services Page ────────────────────────────────────────────────────
 
 export default function Services() {
@@ -1061,11 +1009,9 @@ export default function Services() {
     groups,
     refresh: refreshGroups,
   } = useServiceGroups();
-  const { processes } = useProcesses();
 
   const [activeGroup, setActiveGroup] = useState<string | null>(null);
   const [sidebarSearch, setSidebarSearch] = useState('');
-  const [highlightedServiceId, setHighlightedServiceId] = useState<string | null>(null);
   const [showAddService, setShowAddService] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
@@ -1074,6 +1020,8 @@ export default function Services() {
   const [actionLoading, setActionLoading] = useState<Map<string, string>>(new Map());
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [bulkLoading, setBulkLoading] = useState<string | null>(null);
+  const [groupsCollapsed, setGroupsCollapsed] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'service' | 'group'; id: string; name: string } | null>(null);
 
   const tableRef = useRef<HTMLDivElement>(null);
 
@@ -1100,12 +1048,20 @@ export default function Services() {
         });
 
   const healthyCount = services.filter((s) => s.status === 'healthy').length;
-  const activeRuns = processes.filter((p) => p.status === 'running').length;
+  const downCount = services.filter((s) => s.status === 'down').length;
+  const degradedCount = services.filter((s) => s.status === 'degraded').length;
+
+  // Use sidebarSearch as main search filter
+  const displayedServices = sidebarSearch
+    ? filteredServices.filter((s) =>
+        s.name.toLowerCase().includes(sidebarSearch.toLowerCase())
+      )
+    : filteredServices;
 
   // Filtered IDs set for select-all
-  const filteredIds = new Set(filteredServices.map((s) => s.id));
+  const filteredIds = new Set(displayedServices.map((s) => s.id));
   const selectedInView = new Set([...selectedIds].filter((id) => filteredIds.has(id)));
-  const allFilteredSelected = filteredServices.length > 0 && selectedInView.size === filteredServices.length;
+  const allFilteredSelected = displayedServices.length > 0 && selectedInView.size === displayedServices.length;
 
   // ── Action loading helpers ──
   function setActionLoadingKey(key: string, action: string) {
@@ -1212,11 +1168,14 @@ export default function Services() {
     setEditingService(null);
   }
 
-  async function handleDeleteService(service: Service) {
-    if (!window.confirm(`Delete ${service.name}?`)) return;
+  function handleDeleteService(service: Service) {
+    setDeleteConfirm({ type: 'service', id: service.id, name: service.name });
+  }
+
+  async function confirmDeleteService(id: string) {
     try {
-      await api.deleteService(service.id);
-      addToast(`${service.name} deleted`, 'success');
+      await api.deleteService(id);
+      addToast('Service deleted', 'success');
       await refreshServices();
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
@@ -1236,12 +1195,15 @@ export default function Services() {
     }
   }
 
-  async function handleDeleteGroup(group: ServiceGroup) {
-    if (!window.confirm(`Delete group "${group.name}"?`)) return;
+  function handleDeleteGroup(group: ServiceGroup) {
+    setDeleteConfirm({ type: 'group', id: group.id, name: group.name });
+  }
+
+  async function confirmDeleteGroup(id: string) {
     try {
-      await api.deleteServiceGroup(group.id);
-      addToast(`Group "${group.name}" deleted`, 'success');
-      if (activeGroup === group.id) setActiveGroup(null);
+      await api.deleteServiceGroup(id);
+      addToast('Group deleted', 'success');
+      if (activeGroup === id) setActiveGroup(null);
       await refreshGroups();
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
@@ -1249,20 +1211,6 @@ export default function Services() {
     }
   }
 
-  function handleSidebarSelect(id: string) {
-    setHighlightedServiceId(id);
-    // Scroll the service row into view
-    setTimeout(() => {
-      const row = document.getElementById(`svc-row-${id}`);
-      if (row) {
-        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        row.style.background = 'rgba(96,165,250,0.08)';
-        setTimeout(() => {
-          row.style.background = '';
-        }, 1500);
-      }
-    }, 50);
-  }
 
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
@@ -1291,35 +1239,13 @@ export default function Services() {
     }
   }
 
-  // Titlebar
-  const titlePath = activeGroup
-    ? `Services · ${groups.find((g) => g.id === activeGroup)?.name ?? 'Group'}`
-    : 'Services';
-
   const showServiceModal = showAddService || editingService !== null;
   const logService = logServiceId ? services.find((s) => s.id === logServiceId) : null;
 
   return (
     <div className="dd" style={{ width: '100%', height: '100%' }}>
-      <div className="app-window">
-        <Titlebar path={titlePath} />
-
-        <ServicesSidebar
-          services={services}
-          search={sidebarSearch}
-          onSearchChange={setSidebarSearch}
-          highlightedServiceId={highlightedServiceId}
-          onSelectService={handleSidebarSelect}
-        />
-
-        <main
-          style={{
-            gridArea: 'main',
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--dd-bg)' }}>
+        <main style={{ flex: 1, overflow: 'auto', padding: 0 }}>
           {loading ? (
             <div
               style={{
@@ -1336,77 +1262,27 @@ export default function Services() {
           ) : services.length === 0 ? (
             <EmptyState onAddService={() => setShowAddService(true)} />
           ) : (
-            <div style={{ flex: 1, overflow: 'auto' }} ref={tableRef}>
-              {/* Header bar */}
-              <div className="pg-head" style={{ marginBottom: 0 }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 16,
-                    marginBottom: 12,
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <h1
-                      style={{
-                        fontSize: 18,
-                        fontWeight: 600,
-                        color: 'var(--dd-text)',
-                      }}
-                    >
-                      Services
-                    </h1>
-                    <span
-                      className="badge"
-                      style={{
-                        background: statusBg(
-                          healthyCount === services.length
-                            ? 'healthy'
-                            : healthyCount === 0
-                              ? 'down'
-                              : 'degraded'
-                        ),
-                        color: statusColor(
-                          healthyCount === services.length
-                            ? 'healthy'
-                            : healthyCount === 0
-                              ? 'down'
-                              : 'degraded'
-                        ),
-                        borderColor: statusBorder(
-                          healthyCount === services.length
-                            ? 'healthy'
-                            : healthyCount === 0
-                              ? 'down'
-                              : 'degraded'
-                        ),
-                      }}
-                    >
-                      <span className="dot" />
-                      {healthyCount}/{services.length} healthy
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() => setShowCreateGroup(true)}
-                    >
-                      <Icon name="create_new_folder" size={14} />
-                      New group
-                    </button>
-                    <button
-                      className="btn btn-primary"
-                      onClick={() => setShowAddService(true)}
-                    >
-                      <Icon name="add" size={14} />
-                      Add service
-                    </button>
-                  </div>
-                </div>
+            <div style={{ padding: '20px 28px 80px' }} ref={tableRef}>
 
-                {/* Group filter pills */}
+              {/* ── Summary stat cards ── */}
+              <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+                <StatCard label="Total" value={services.length} borderColor="var(--dd-blue)" />
+                <StatCard label="Healthy" value={healthyCount} borderColor="var(--dd-green)" />
+                <StatCard label="Down" value={downCount} borderColor="var(--dd-red)" />
+                <StatCard label="Degraded" value={degradedCount} borderColor="var(--dd-amber)" />
+              </div>
+
+              {/* ── Toolbar ── */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  marginBottom: 16,
+                  flexWrap: 'wrap',
+                }}
+              >
+                {/* Group filter pills (left) */}
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <FilterPill
                     label="All"
@@ -1427,97 +1303,173 @@ export default function Services() {
                     );
                   })}
                 </div>
+
+                {/* Search (center) */}
+                <div style={{ flex: 1, minWidth: 180, maxWidth: 320, position: 'relative' }}>
+                  <Icon
+                    name="search"
+                    size={14}
+                    style={{
+                      position: 'absolute',
+                      left: 10,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: 'var(--dd-text-4)',
+                      pointerEvents: 'none',
+                    }}
+                  />
+                  <input
+                    className="input"
+                    value={sidebarSearch}
+                    onChange={(e) => setSidebarSearch(e.target.value)}
+                    placeholder="Search services..."
+                    style={{
+                      paddingLeft: 32,
+                      fontSize: 12,
+                      height: 32,
+                      borderRadius: 8,
+                      width: '100%',
+                    }}
+                  />
+                  {sidebarSearch && (
+                    <button
+                      onClick={() => setSidebarSearch('')}
+                      style={{
+                        position: 'absolute',
+                        right: 8,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: 'var(--dd-text-4)',
+                        padding: 0,
+                        display: 'flex',
+                      }}
+                    >
+                      <Icon name="close" size={12} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Action buttons (right) */}
+                <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => setShowCreateGroup(true)}
+                    style={{ height: 32, fontSize: 12, padding: '0 12px', borderRadius: 8 }}
+                  >
+                    <Icon name="create_new_folder" size={14} />
+                    New Group
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => setShowAddService(true)}
+                    style={{ height: 32, fontSize: 12, padding: '0 14px', borderRadius: 8 }}
+                  >
+                    <Icon name="add" size={14} />
+                    Add Service
+                  </button>
+                </div>
               </div>
 
-              {/* Bulk action bar */}
-              {selectedInView.size > 0 && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    padding: '8px 24px',
-                    background: 'rgba(96,165,250,0.06)',
-                    borderBottom: '1px solid var(--dd-line)',
-                    fontSize: 12,
-                  }}
-                >
-                  <span style={{ fontWeight: 600, color: 'var(--dd-blue)' }}>
-                    {selectedInView.size} selected
-                  </span>
+              {/* ── Groups strip (collapsible) ── */}
+              {groups.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
                   <button
-                    className="btn btn-sm"
+                    onClick={() => setGroupsCollapsed(!groupsCollapsed)}
                     style={{
-                      color: 'var(--dd-green)',
-                      background: 'var(--dd-surface-3)',
-                      borderColor: 'var(--dd-line-2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '4px 0',
+                      marginBottom: groupsCollapsed ? 0 : 10,
+                      color: 'var(--dd-text-3)',
+                      fontFamily: 'inherit',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
                     }}
-                    disabled={bulkLoading !== null}
-                    onClick={() => handleBulkAction('start')}
                   >
-                    {bulkLoading === 'start' ? (
-                      <SmallSpinner color="var(--dd-green)" />
-                    ) : (
-                      <Icon name="play_arrow" size={13} />
-                    )}
-                    Start selected
+                    <Icon
+                      name="expand_more"
+                      size={16}
+                      style={{
+                        transform: groupsCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+                        transition: 'transform 150ms ease',
+                        color: 'var(--dd-text-4)',
+                      }}
+                    />
+                    Groups
+                    <span className="mono" style={{ fontSize: 10, color: 'var(--dd-text-4)', fontWeight: 400 }}>
+                      {groups.length}
+                    </span>
                   </button>
-                  <button
-                    className="btn btn-sm"
-                    style={{
-                      color: 'var(--dd-red)',
-                      background: 'var(--dd-surface-3)',
-                      borderColor: 'var(--dd-line-2)',
-                    }}
-                    disabled={bulkLoading !== null}
-                    onClick={() => handleBulkAction('stop')}
-                  >
-                    {bulkLoading === 'stop' ? (
-                      <SmallSpinner color="var(--dd-red)" />
-                    ) : (
-                      <Icon name="stop" size={13} />
-                    )}
-                    Stop selected
-                  </button>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => setSelectedIds(new Set())}
-                  >
-                    Deselect all
-                  </button>
+                  {!groupsCollapsed && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: 10,
+                        overflowX: 'auto',
+                        paddingBottom: 4,
+                      }}
+                    >
+                      {groups.map((g) => (
+                        <GroupCard
+                          key={g.id}
+                          group={g}
+                          services={services}
+                          onStartAll={handleGroupStart}
+                          onStopAll={handleGroupStop}
+                          onDelete={handleDeleteGroup}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Service table */}
-              <div style={{ padding: '0 24px 16px' }}>
-                {filteredServices.length === 0 ? (
+              {/* ── Service table ── */}
+              {displayedServices.length === 0 ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '60px 0',
+                    gap: 12,
+                    color: 'var(--dd-text-4)',
+                  }}
+                >
+                  <Icon name="dns" size={40} style={{ color: 'var(--dd-line-2)' }} />
                   <div
                     style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      padding: '60px 0',
-                      gap: 12,
-                      color: 'var(--dd-text-4)',
+                      fontSize: 14,
+                      color: 'var(--dd-text-3)',
+                      fontWeight: 500,
                     }}
                   >
-                    <Icon name="dns" size={40} style={{ color: 'var(--dd-line-2)' }} />
-                    <div
-                      style={{
-                        fontSize: 14,
-                        color: 'var(--dd-text-3)',
-                        fontWeight: 500,
-                      }}
-                    >
-                      No services in this group
-                    </div>
+                    {sidebarSearch ? 'No services match your search' : 'No services in this group'}
                   </div>
-                ) : (
-                  <table className="dd-table" style={{ marginTop: 12 }}>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    borderRadius: 10,
+                    border: '1px solid var(--dd-line)',
+                    overflow: 'hidden',
+                    background: 'var(--dd-surface)',
+                  }}
+                >
+                  <table className="dd-table" style={{ margin: 0 }}>
                     <thead>
                       <tr>
-                        <th style={{ width: 36, padding: '8px 10px' }}>
+                        <th style={{ width: 40, padding: '10px 12px' }}>
                           <input
                             type="checkbox"
                             checked={allFilteredSelected}
@@ -1525,17 +1477,15 @@ export default function Services() {
                             style={{ accentColor: 'var(--dd-blue)' }}
                           />
                         </th>
-                        <th style={{ width: 60 }}>Status</th>
+                        <th style={{ width: 100 }}>Status</th>
                         <th>Name</th>
                         <th style={{ width: 80 }}>Port</th>
-                        <th style={{ width: 80 }}>Category</th>
-                        <th>Health Detail</th>
-                        <th style={{ width: 90 }}>Uptime</th>
-                        <th style={{ width: 190 }}>Actions</th>
+                        <th style={{ width: 100 }}>Uptime</th>
+                        <th style={{ width: 140, textAlign: 'right', paddingRight: 16 }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredServices.map((svc) => {
+                      {displayedServices.map((svc) => {
                         const isHealthy = svc.status === 'healthy';
                         const isDown = svc.status === 'down';
                         const startKey = `${svc.id}-start`;
@@ -1553,9 +1503,15 @@ export default function Services() {
                             style={{
                               transition: 'background 300ms ease',
                             }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = 'var(--dd-surface-2)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = '';
+                            }}
                           >
                             {/* Checkbox */}
-                            <td style={{ padding: '10px 10px' }}>
+                            <td style={{ padding: '10px 12px' }}>
                               <input
                                 type="checkbox"
                                 checked={selectedIds.has(svc.id)}
@@ -1564,60 +1520,25 @@ export default function Services() {
                               />
                             </td>
 
-                            {/* Status dot */}
+                            {/* Status badge */}
                             <td>
-                              <div
-                                style={{
-                                  width: 8,
-                                  height: 8,
-                                  borderRadius: '50%',
-                                  background: statusColor(svc.status),
-                                  boxShadow: `0 0 0 3px ${statusBg(svc.status)}`,
-                                  display: 'inline-block',
-                                }}
+                              <StatusBadge
+                                status={svc.status}
+                                detail={svc.detail || (isDown ? 'unreachable' : undefined)}
                               />
                             </td>
 
                             {/* Name */}
                             <td>
-                              <span style={{ fontWeight: 600, color: 'var(--dd-text)' }}>
+                              <span style={{ fontWeight: 600, color: 'var(--dd-text)', fontSize: 13 }}>
                                 {svc.name}
                               </span>
                             </td>
 
                             {/* Port */}
                             <td>
-                              <span className="mono" style={{ fontSize: 12 }}>
+                              <span className="mono" style={{ fontSize: 12, color: 'var(--dd-text-3)' }}>
                                 :{svc.port}
-                              </span>
-                            </td>
-
-                            {/* Category */}
-                            <td>
-                              <span
-                                className="badge"
-                                style={{
-                                  background: statusBg(svc.status),
-                                  color: statusColor(svc.status),
-                                  borderColor: statusBorder(svc.status),
-                                  fontSize: 10,
-                                  padding: '1px 6px',
-                                }}
-                              >
-                                {svc.category}
-                              </span>
-                            </td>
-
-                            {/* Health detail */}
-                            <td>
-                              <span
-                                className="mono"
-                                style={{
-                                  fontSize: 11,
-                                  color: isDown ? 'var(--dd-red)' : 'var(--dd-text-3)',
-                                }}
-                              >
-                                {svc.detail || (isDown ? 'unreachable' : '--')}
                               </span>
                             </td>
 
@@ -1625,7 +1546,7 @@ export default function Services() {
                             <td>
                               <span
                                 style={{
-                                  fontSize: 11,
+                                  fontSize: 12,
                                   color: isDown ? 'var(--dd-red)' : 'var(--dd-text-3)',
                                   fontWeight: isDown ? 600 : 400,
                                 }}
@@ -1638,42 +1559,42 @@ export default function Services() {
 
                             {/* Actions */}
                             <td>
-                              <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-                                {/* Start */}
-                                {!isHealthy && (
+                              <div style={{ display: 'flex', gap: 2, alignItems: 'center', justifyContent: 'flex-end' }}>
+                                {/* Primary action: Start or Stop */}
+                                {!isHealthy ? (
                                   <button
                                     className="btn btn-sm"
                                     style={{
-                                      color: 'var(--dd-green)',
+                                      color: '#fff',
                                       background: actionLoading.has(startKey)
-                                        ? 'rgba(52,211,153,0.15)'
-                                        : 'var(--dd-surface-3)',
-                                      borderColor: 'var(--dd-line-2)',
-                                      padding: '3px 6px',
+                                        ? 'rgba(52,211,153,0.6)'
+                                        : 'var(--dd-green)',
+                                      border: 'none',
+                                      padding: '4px 8px',
+                                      borderRadius: 6,
+                                      fontWeight: 600,
                                     }}
                                     disabled={anyLoading}
                                     onClick={() => handleServiceAction('start', svc.id)}
                                     title="Start"
                                   >
                                     {actionLoading.has(startKey) ? (
-                                      <SmallSpinner color="var(--dd-green)" />
+                                      <SmallSpinner color="#fff" />
                                     ) : (
-                                      <Icon name="play_arrow" size={13} />
+                                      <Icon name="play_arrow" size={14} />
                                     )}
                                   </button>
-                                )}
-
-                                {/* Stop */}
-                                {isHealthy && (
+                                ) : (
                                   <button
                                     className="btn btn-sm"
                                     style={{
                                       color: 'var(--dd-red)',
                                       background: actionLoading.has(stopKey)
                                         ? 'rgba(248,113,113,0.15)'
-                                        : 'var(--dd-surface-3)',
-                                      borderColor: 'var(--dd-line-2)',
-                                      padding: '3px 6px',
+                                        : 'var(--dd-surface-2)',
+                                      borderColor: 'var(--dd-line)',
+                                      padding: '4px 8px',
+                                      borderRadius: 6,
                                     }}
                                     disabled={anyLoading}
                                     onClick={() => handleServiceAction('stop', svc.id)}
@@ -1682,22 +1603,19 @@ export default function Services() {
                                     {actionLoading.has(stopKey) ? (
                                       <SmallSpinner color="var(--dd-red)" />
                                     ) : (
-                                      <Icon name="stop" size={13} />
+                                      <Icon name="stop" size={14} />
                                     )}
                                   </button>
                                 )}
 
                                 {/* Restart */}
                                 <button
-                                  className="btn btn-sm"
+                                  className="btn btn-ghost btn-sm"
                                   style={{
-                                    color: 'var(--dd-amber)',
-                                    background: actionLoading.has(restartKey)
-                                      ? 'rgba(251,191,36,0.15)'
-                                      : 'var(--dd-surface-3)',
-                                    borderColor: 'var(--dd-line-2)',
-                                    padding: '3px 6px',
-                                    opacity: isDown ? 0.4 : 1,
+                                    padding: '4px 6px',
+                                    borderRadius: 6,
+                                    color: actionLoading.has(restartKey) ? 'var(--dd-amber)' : 'var(--dd-text-4)',
+                                    opacity: isDown ? 0.3 : 1,
                                   }}
                                   disabled={anyLoading || isDown}
                                   onClick={() => handleServiceAction('restart', svc.id)}
@@ -1706,7 +1624,7 @@ export default function Services() {
                                   {actionLoading.has(restartKey) ? (
                                     <SmallSpinner color="var(--dd-amber)" />
                                   ) : (
-                                    <Icon name="refresh" size={13} />
+                                    <Icon name="refresh" size={14} />
                                   )}
                                 </button>
 
@@ -1714,8 +1632,8 @@ export default function Services() {
                                 <div
                                   style={{
                                     width: 1,
-                                    height: 18,
-                                    background: 'var(--dd-line-2)',
+                                    height: 16,
+                                    background: 'var(--dd-line)',
                                     margin: '0 2px',
                                   }}
                                 />
@@ -1725,9 +1643,9 @@ export default function Services() {
                                   className="btn btn-ghost btn-sm"
                                   onClick={() => setEditingService(svc)}
                                   title="Edit"
-                                  style={{ padding: '3px 5px' }}
+                                  style={{ padding: '4px 6px', borderRadius: 6, color: 'var(--dd-text-4)' }}
                                 >
-                                  <Icon name="edit" size={13} />
+                                  <Icon name="edit" size={14} />
                                 </button>
 
                                 {/* Logs */}
@@ -1740,14 +1658,15 @@ export default function Services() {
                                   }
                                   title="Logs"
                                   style={{
-                                    padding: '3px 5px',
+                                    padding: '4px 6px',
+                                    borderRadius: 6,
                                     color:
                                       logServiceId === svc.id
                                         ? 'var(--dd-blue)'
-                                        : undefined,
+                                        : 'var(--dd-text-4)',
                                   }}
                                 >
-                                  <Icon name="terminal" size={13} />
+                                  <Icon name="terminal" size={14} />
                                 </button>
 
                                 {/* Delete */}
@@ -1755,9 +1674,11 @@ export default function Services() {
                                   className="btn btn-ghost btn-sm"
                                   onClick={() => handleDeleteService(svc)}
                                   title="Delete"
-                                  style={{ padding: '3px 5px', color: 'var(--dd-red)' }}
+                                  style={{ padding: '4px 6px', borderRadius: 6, color: 'var(--dd-text-4)' }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--dd-red)'; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--dd-text-4)'; }}
                                 >
-                                  <Icon name="delete" size={13} />
+                                  <Icon name="delete" size={14} />
                                 </button>
                               </div>
                             </td>
@@ -1766,93 +1687,106 @@ export default function Services() {
                       })}
                     </tbody>
                   </table>
-                )}
-
-                {/* Log panel */}
-                {logService && (
-                  <div style={{ marginTop: 8, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--dd-line)' }}>
-                    <LogPanel
-                      serviceId={logService.id}
-                      serviceName={logService.name}
-                      onClose={() => setLogServiceId(null)}
-                    />
-                  </div>
-                )}
-
-                {/* Groups section */}
-                {groups.length > 0 && (
-                  <div style={{ marginTop: 24 }}>
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        marginBottom: 10,
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: 'var(--dd-text-2)',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em',
-                        }}
-                      >
-                        Groups
-                      </span>
-                      <span
-                        className="mono"
-                        style={{ fontSize: 11, color: 'var(--dd-text-4)' }}
-                      >
-                        {groups.length}
-                      </span>
-                    </div>
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: 8,
-                      }}
-                    >
-                      {groups.map((g) => (
-                        <GroupCard
-                          key={g.id}
-                          group={g}
-                          services={services}
-                          onStartAll={handleGroupStart}
-                          onStopAll={handleGroupStop}
-                          onDelete={handleDeleteGroup}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
         </main>
 
-        <StatusBar
-          processCount={processes.length}
-          activeRuns={activeRuns}
-          extra={
-            <span>
-              <span
-                style={{
-                  color:
-                    healthyCount === services.length
-                      ? 'var(--dd-green)'
-                      : 'var(--dd-amber)',
-                }}
-              >
-                {healthyCount}
-              </span>
-              /{services.length} svc
-            </span>
-          }
-        />
       </div>
+
+      {/* Floating bulk action bar */}
+      {selectedInView.size > 0 && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 40,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 80,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            padding: '10px 20px',
+            borderRadius: 12,
+            background: 'var(--dd-surface)',
+            border: '1px solid var(--dd-line)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.3), 0 2px 8px rgba(0,0,0,0.2)',
+            fontSize: 13,
+            animation: 'dd-toast-in 200ms ease',
+          }}
+        >
+          <span style={{ fontWeight: 600, color: 'var(--dd-blue)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="check_circle" size={15} />
+            {selectedInView.size} selected
+          </span>
+
+          <div style={{ width: 1, height: 20, background: 'var(--dd-line)' }} />
+
+          <button
+            className="btn btn-sm"
+            style={{
+              color: '#fff',
+              background: 'var(--dd-green)',
+              border: 'none',
+              padding: '5px 14px',
+              borderRadius: 8,
+              fontWeight: 600,
+              fontSize: 12,
+            }}
+            disabled={bulkLoading !== null}
+            onClick={() => handleBulkAction('start')}
+          >
+            {bulkLoading === 'start' ? (
+              <SmallSpinner color="#fff" />
+            ) : (
+              <Icon name="play_arrow" size={14} />
+            )}
+            Start
+          </button>
+          <button
+            className="btn btn-sm"
+            style={{
+              color: 'var(--dd-red)',
+              background: 'var(--dd-surface-2)',
+              borderColor: 'var(--dd-line)',
+              padding: '5px 14px',
+              borderRadius: 8,
+              fontWeight: 600,
+              fontSize: 12,
+            }}
+            disabled={bulkLoading !== null}
+            onClick={() => handleBulkAction('stop')}
+          >
+            {bulkLoading === 'stop' ? (
+              <SmallSpinner color="var(--dd-red)" />
+            ) : (
+              <Icon name="stop" size={14} />
+            )}
+            Stop
+          </button>
+
+          <div style={{ width: 1, height: 20, background: 'var(--dd-line)' }} />
+
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => setSelectedIds(new Set())}
+            style={{ padding: '5px 10px', fontSize: 12, color: 'var(--dd-text-3)' }}
+          >
+            <Icon name="close" size={14} />
+            Deselect
+          </button>
+        </div>
+      )}
+
+      {/* Slide-up log panel */}
+      {logService && (
+        <LogPanel
+          serviceId={logService.id}
+          serviceName={logService.name}
+          onClose={() => setLogServiceId(null)}
+        />
+      )}
 
       {/* Modals */}
       {showServiceModal && (
@@ -1872,6 +1806,23 @@ export default function Services() {
 
       {/* Toasts */}
       <Toasts toasts={toasts} onDismiss={dismissToast} />
+
+      {deleteConfirm && (
+        <DialogModal
+          mode="confirm"
+          title={`Delete ${deleteConfirm.type === 'group' ? 'group ' : ''}"${deleteConfirm.name}"?`}
+          description={deleteConfirm.type === 'group' ? 'All services in this group will be ungrouped.' : 'This service will be permanently removed.'}
+          confirmLabel="Delete"
+          danger
+          onConfirm={async () => {
+            const { type, id } = deleteConfirm;
+            setDeleteConfirm(null);
+            if (type === 'service') await confirmDeleteService(id);
+            else await confirmDeleteGroup(id);
+          }}
+          onCancel={() => setDeleteConfirm(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1896,16 +1847,17 @@ function FilterPill({
         display: 'inline-flex',
         alignItems: 'center',
         gap: 5,
-        padding: '4px 10px',
+        padding: '4px 12px',
         borderRadius: 9999,
-        border: `1px solid ${active ? 'var(--dd-blue)' : 'var(--dd-line-2)'}`,
-        background: active ? 'rgba(96,165,250,0.10)' : 'var(--dd-surface-3)',
-        color: active ? 'var(--dd-blue)' : 'var(--dd-text-2)',
+        border: `1px solid ${active ? 'var(--dd-blue)' : 'var(--dd-line)'}`,
+        background: active ? 'rgba(96,165,250,0.10)' : 'var(--dd-surface)',
+        color: active ? 'var(--dd-blue)' : 'var(--dd-text-3)',
         cursor: 'pointer',
         fontSize: 12,
         fontWeight: 500,
         fontFamily: 'inherit',
         transition: 'all 120ms ease',
+        height: 32,
       }}
     >
       {label}

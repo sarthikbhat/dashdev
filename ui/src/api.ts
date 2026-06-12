@@ -6,9 +6,13 @@ import type {
   TrackedProcess,
   WorkflowStep,
   WorkflowParam,
+  FlowNode,
   Service,
   ServiceHealthStatus,
   ServiceGroup,
+  RedisInfo,
+  RedisKeyInfo,
+  RedisKeyDetail,
 } from "./types";
 
 const BASE = "/api";
@@ -38,6 +42,7 @@ export function getWorkflow(id: string): Promise<Workflow> {
 export interface SaveWorkflowBody {
   name: string;
   steps: WorkflowStep[];
+  nodes?: FlowNode[];
   description?: string;
   icon?: string;
   tags?: string[];
@@ -121,3 +126,48 @@ export const deleteServiceGroup = (id: string) => fetchJson<void>(`/services/gro
 export const startServiceGroup = (id: string) => fetchJson<void>(`/services/groups/${id}/start`, { method: "POST" });
 export const stopServiceGroup = (id: string) => fetchJson<void>(`/services/groups/${id}/stop`, { method: "POST" });
 export const importBackendctl = (filePath: string) => fetchJson<{ imported: number }>("/services/import-backendctl", { method: "POST", body: JSON.stringify({ file_path: filePath }) });
+
+// ── Redis ─────────────────────────────────────────────────────────────────
+
+export const redisInfo = () => fetchJson<RedisInfo>("/redis/info");
+
+export const redisKeys = (pattern?: string, cursor?: string, count?: number) => {
+  const params = new URLSearchParams();
+  if (pattern) params.set("pattern", pattern);
+  if (cursor) params.set("cursor", cursor);
+  if (count) params.set("count", String(count));
+  return fetchJson<{ keys: RedisKeyInfo[]; nextCursor: string }>(`/redis/keys?${params}`);
+};
+
+export const redisGetKey = (key: string) =>
+  fetchJson<RedisKeyDetail>(`/redis/key/${encodeURIComponent(key)}`);
+
+export const redisSetKey = (key: string, value: string) =>
+  fetchJson<void>(`/redis/key/${encodeURIComponent(key)}`, {
+    method: "PUT",
+    body: JSON.stringify({ value }),
+  });
+
+export const redisDeleteKey = (key: string) =>
+  fetchJson<void>(`/redis/key/${encodeURIComponent(key)}`, { method: "DELETE" });
+
+// ── GitHub / CI/CD ───────────────────────────────────────────────────────
+
+import type { GitHubSettings, GitHubRepo, GitHubStatusResponse, GitRepoStatus } from "./types";
+
+export const getGitHubSettings = () => fetchJson<GitHubSettings>("/github/settings");
+export const setGitHubToken = (token: string) => fetchJson<{ ok: boolean }>("/github/settings/token", { method: "PUT", body: JSON.stringify({ token }) });
+export const deleteGitHubToken = () => fetchJson<{ ok: boolean }>("/github/settings/token", { method: "DELETE" });
+export const setTrackedRepos = (repos: string[]) => fetchJson<{ ok: boolean }>("/github/settings/repos", { method: "PUT", body: JSON.stringify({ repos }) });
+export const listGitHubRepos = () => fetchJson<GitHubRepo[]>("/github/repos");
+export const getGitHubStatus = () => fetchJson<GitHubStatusResponse>("/github/status");
+
+// ── Local Git ─────────────────────────────────────────────────────────────
+
+export const getGitRepos = () => fetchJson<string[]>("/git/repos");
+export const getGitStatus = () => fetchJson<GitRepoStatus[]>("/git/status");
+export const addGitRepo = (path: string) => fetchJson<{ ok: boolean; added: boolean; message?: string }>("/git/repos/add", { method: "POST", body: JSON.stringify({ path }) });
+export const removeGitRepo = (path: string) => fetchJson<{ ok: boolean }>("/git/repos/remove", { method: "POST", body: JSON.stringify({ path }) });
+export const scanGitRepos = (directory: string) => fetchJson<string[]>("/git/scan", { method: "POST", body: JSON.stringify({ directory }) });
+export const gitPull = (path: string) => fetchJson<{ ok: boolean; output: string }>("/git/pull", { method: "POST", body: JSON.stringify({ path }) });
+export const gitFetch = (path: string) => fetchJson<{ ok: boolean }>("/git/fetch", { method: "POST", body: JSON.stringify({ path }) });

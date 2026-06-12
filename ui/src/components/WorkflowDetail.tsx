@@ -10,6 +10,7 @@ interface Props {
   runs: Run[];
   glyphColor: string;
   onRun: () => void;
+  onRunClick?: (runId: string) => void;
 }
 
 // Parse a command string into colored parts: flags (--foo), vars ($VAR), strings ("..."), and plain text
@@ -70,7 +71,7 @@ function avgDuration(runs: Run[]): string {
   return formatDuration(avg);
 }
 
-export default function WorkflowDetail({ workflow, runs, glyphColor, onRun }: Props) {
+export default function WorkflowDetail({ workflow, runs, glyphColor, onRun, onRunClick }: Props) {
   const navigate = useNavigate();
 
   const lastRun = runs[0];
@@ -214,7 +215,7 @@ export default function WorkflowDetail({ workflow, runs, glyphColor, onRun }: Pr
               Recent runs
             </span>
             <button
-              onClick={() => navigate('/history')}
+              onClick={() => navigate(`/history?wf=${workflow.id}`)}
               style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--dd-blue)', textDecoration: 'none', padding: 0 }}
             >
               View all →
@@ -229,7 +230,13 @@ export default function WorkflowDetail({ workflow, runs, glyphColor, onRun }: Pr
               <table className="dd-table">
                 <tbody>
                   {recentRuns.map((r, i) => (
-                    <tr key={r.id ?? i}>
+                    <tr
+                      key={r.id ?? i}
+                      style={{ cursor: onRunClick ? 'pointer' : undefined }}
+                      onClick={() => onRunClick?.(r.id)}
+                      onMouseEnter={(e) => { if (onRunClick) e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}
+                    >
                       <td style={{ width: 22, padding: '8px 0 8px 14px' }}>
                         {r.status === 'completed'
                           ? <Icon name="check_circle" size={14} fill style={{ color: 'var(--dd-green)' }} />

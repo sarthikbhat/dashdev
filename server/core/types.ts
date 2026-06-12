@@ -10,7 +10,7 @@ export interface HealthCheck {
 export interface WorkflowParam {
   name: string;
   label: string;
-  type: "text" | "select" | "toggle";
+  type: "text" | "textarea" | "select" | "toggle";
   required?: boolean;
   default?: string;
   options?: string[];
@@ -26,6 +26,32 @@ export interface WorkflowStep {
   env?: Record<string, string>;
   health_check?: HealthCheck;
   outputs?: Record<string, string>;
+  branch_group?: string;
+  branch_id?: string;
+  branch_condition?: string;
+}
+
+export interface FlowStep {
+  id: string;
+  name: string;
+  command: string;
+  workdir: string;
+  timeout: string;
+  onFail: "abort" | "retry" | "continue";
+}
+
+export interface FlowBranch {
+  id: string;
+  label: string;
+  condition: string;
+  steps: FlowStep[];
+}
+
+export interface FlowNode {
+  id: string;
+  type: "step" | "parallel";
+  step?: FlowStep;
+  branches?: FlowBranch[];
 }
 
 export interface WorkflowDefinition {
@@ -36,6 +62,7 @@ export interface WorkflowDefinition {
   env?: Record<string, string>;
   params?: WorkflowParam[];
   steps: WorkflowStep[];
+  nodes?: FlowNode[];
 }
 
 export type WorkflowSource = "yaml" | "js" | "ui";
@@ -135,9 +162,11 @@ export interface Service {
   name: string;
   port: number;
   health_check_type: HealthCheckType;
-  health_check_value?: string;  // URL for http, command for command, null for port
+  health_check_value?: string;
   start_command?: string;
   stop_command?: string;
+  setup_command?: string;
+  workdir?: string;
   category: ServiceCategory;
   log_file?: string;
   created_at: string;

@@ -6,6 +6,8 @@ export interface ParsedService {
   category: "infra" | "app";
   start_command?: string;
   stop_command?: string;
+  setup_command?: string;
+  workdir?: string;
   health_check_type: "port" | "http" | "command";
   health_check_value?: string;
 }
@@ -144,24 +146,28 @@ export function parseBackendctl(filePath: string): BackendctlParseResult {
   }
 
   // App service start commands from app_cmd()
+  // The app_cmd() function uses heredocs — each case block contains the full
+  // setup sequence (env init, cd, exec). We need the ENTIRE block as a single
+  // command, joined with &&, because the exec depends on the setup lines.
   const appCmdSection = extractFunctionBody(content, "app_cmd");
   if (appCmdSection) {
     for (const svc of services) {
       if (svc.category !== "app") continue;
-      const block = extractCaseBlock(appCmdSection, svc.name);
-      if (!block) continue;
 
-      // Pull the exec line as the canonical start command
-      const execMatch = block.match(/exec\s+(.+)/);
-      if (execMatch) {
-        svc.start_command = execMatch[1].trim();
+      // app_cmd uses heredocs: cat <<'ECMD' ... ECMD
+      // Extract the heredoc body for this service's case block
+      const heredocCmd = extractAppCmdHeredoc(content, svc.name);
+      if (heredocCmd) {
+        svc.start_command = heredocCmd;
         continue;
       }
 
-      // Fallback: first non-empty, non-comment, non-cd/source line
-      const lines = block.split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#") && !l.startsWith("cd ") && !l.startsWith("source ") && !l.startsWith("eval ") && !l.startsWith("rbenv ") && !l.startsWith("rvm ") && !l.startsWith("nvm ") && !l.startsWith("export "));
+      // Fallback: regular case block parsing
+      const block = extractCaseBlock(appCmdSection, svc.name);
+      if (!block) continue;
+      const lines = block.split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#") && !l.startsWith("ECMD"));
       if (lines.length > 0) {
-        svc.start_command = lines[0];
+        svc.start_command = lines.map((l) => l.replace(/^exec\s+/, "")).join(" && ");
       }
     }
   }
@@ -203,6 +209,28 @@ export function parseBackendctl(filePath: string): BackendctlParseResult {
     }
   }
 
+  // ── 6. Extract workdir and auto-detect setup commands ───────────────────
+  for (const svc of services) {
+    if (!svc.start_command) continue;
+    const cdMatch = svc.start_command.match(/cd\s+["']?([^"'&;]+)["']?/);
+    if (cdMatch) {
+      svc.workdir = cdMatch[1].trim();
+      const resolved = svc.workdir
+        .replace(/\$HOME/g, process.env.HOME ?? "~")
+        .replace(/\$BASE_DIR/g, `${process.env.HOME}/Desktop/code/tm/backend`);
+      try {
+        const files = fs.readdirSync(resolved);
+        if (files.includes("Gemfile")) svc.setup_command = "bundle install";
+        else if (files.includes("pnpm-lock.yaml")) svc.setup_command = "pnpm install";
+        else if (files.includes("yarn.lock")) svc.setup_command = "yarn install";
+        else if (files.includes("package-lock.json")) svc.setup_command = "npm install";
+        else if (files.includes("package.json")) svc.setup_command = "npm install";
+      } catch {
+        // workdir doesn't exist yet
+      }
+    }
+  }
+
   return { services, groups };
 }
 
@@ -224,6 +252,48 @@ function extractFunctionBody(content: string, funcName: string): string | null {
  * Handles names with hyphens (e.g. obs-api).
  * Returns the text between `name)` and the next `;;` or `*)`.
  */
+/**
+ * Extracts the heredoc body from app_cmd() for a given service.
+ * Looks for: serviceName) cat <<'ECMD'\n...\nECMD
+ * Joins all meaningful lines with && and strips `exec` prefix.
+ * Fixes known portability issues (e.g. $HOME/.rbenv/bin/rbenv → $(which rbenv)).
+ */
+function extractAppCmdHeredoc(content: string, serviceName: string): string | null {
+  const escaped = serviceName.replace(/-/g, "\\-");
+  const pattern = new RegExp(
+    `${escaped}\\)\\s+cat\\s+<<['\"]?ECMD['\"]?\\n([\\s\\S]*?)\\nECMD`,
+    "m"
+  );
+  const match = content.match(pattern);
+  if (!match) return null;
+
+  const lines = match[1]
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("#"));
+
+  // Strip `exec` prefix, collapse if/fi blocks into flat commands
+  const processed: string[] = [];
+  let inIf = false;
+  for (const line of lines) {
+    if (line.startsWith("if ") || line === "if") { inIf = true; continue; }
+    if (line === "fi") { inIf = false; continue; }
+    if (line === "elif" || line.startsWith("elif ")) continue;
+    if (line === "else") continue;
+    if (inIf) continue;
+
+    let cmd = line.replace(/^exec\s+/, "");
+    // Fix hardcoded rbenv path → use whatever is on PATH
+    cmd = cmd.replace(/\$HOME\/\.rbenv\/bin\/rbenv/g, "rbenv");
+    cmd = cmd.replace(/"\$HOME\/\.rbenv\/bin\/rbenv"/g, "rbenv");
+    // Fix nvm source path → use brew nvm if available
+    cmd = cmd.replace(/source ~\/\.nvm\/nvm\.sh/g, "source $(brew --prefix nvm)/nvm.sh 2>/dev/null || source ~/.nvm/nvm.sh");
+    processed.push(cmd);
+  }
+
+  return processed.length > 0 ? processed.join(" && ") : null;
+}
+
 function extractCaseBlock(funcBody: string, serviceName: string): string | null {
   // Escape hyphens for regex
   const escaped = serviceName.replace(/-/g, "\\-");

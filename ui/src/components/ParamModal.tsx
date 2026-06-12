@@ -17,39 +17,32 @@ interface Props {
   onCancel: () => void;
 }
 
-// ── Field wrapper ─────────────────────────────────────────────────────────────
-
-interface FieldProps {
-  label: string;
-  type: string;
-  required?: boolean;
-  help?: string;
-  children: React.ReactNode;
-}
-
-function Field({ label, type, required, help, children }: FieldProps) {
+function Field({ label, type, required, children }: {
+  label: string; type: string; required?: boolean; children: React.ReactNode;
+}) {
   return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-        <span className="mono" style={{ fontSize: 12, color: 'var(--dd-text)' }}>{label}</span>
-        <span style={{ fontSize: 11, color: 'var(--dd-purple)' }}>{type}</span>
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--dd-text)' }}>{label}</span>
+        <span style={{
+          fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em',
+          color: 'var(--dd-accent-bright)', background: 'var(--dd-accent-dim)',
+          padding: '1px 6px', borderRadius: 4,
+        }}>
+          {type}
+        </span>
         {required && (
           <span style={{ fontSize: 10, color: 'var(--dd-amber)', fontWeight: 500 }}>required</span>
         )}
-        <span style={{ flex: 1 }} />
-        {help && <span style={{ fontSize: 11, color: 'var(--dd-text-4)' }}>{help}</span>}
       </div>
       {children}
     </div>
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
-
 export default function ParamModal({ workflow, onRun, onCancel }: Props) {
   const { name, icon, params, estimatedTime } = workflow;
 
-  // Build initial values from defaults
   const [values, setValues] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     for (const p of params) {
@@ -58,24 +51,17 @@ export default function ParamModal({ workflow, onRun, onCancel }: Props) {
     return init;
   });
 
-  const [saveDefaults, setSaveDefaults] = useState(false);
-  const [previewOpen, setPreviewOpen] = useState(true);
-
-  const glyph = icon ?? { ch: name.charAt(0).toUpperCase(), color: 'var(--dd-amber)' };
+  const glyph = icon ?? { ch: name.charAt(0).toUpperCase(), color: 'var(--dd-accent)' };
   const requiredCount = params.filter((p) => p.required).length;
 
-  const setValue = (name: string, value: string) => {
-    setValues((prev) => ({ ...prev, [name]: value }));
+  const setValue = (n: string, value: string) => {
+    setValues((prev) => ({ ...prev, [n]: value }));
   };
 
-  // Keyboard shortcut: Cmd+Enter to run, Escape to cancel
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onCancel();
-      } else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        onRun(values);
-      }
+      if (e.key === 'Escape') onCancel();
+      else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') onRun(values);
     },
     [onCancel, onRun, values]
   );
@@ -85,232 +71,94 @@ export default function ParamModal({ workflow, onRun, onCancel }: Props) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
-  // Build CLI command preview
-  const cliPreview = (() => {
-    const parts: React.ReactNode[] = [
-      <span key="cmd" style={{ color: 'var(--dd-text)' }}>devdash run</span>,
-      ' ',
-      <span key="wf" style={{ color: 'var(--dd-blue)' }}>{name.toLowerCase().replace(/\s+/g, '-')}</span>,
-    ];
-    for (const p of params) {
-      const val = values[p.name];
-      if (!val && !p.required) continue;
-      if (p.type === 'toggle') {
-        if (val === 'true') {
-          parts.push(' ');
-          parts.push(<span key={`flag-${p.name}`} style={{ color: 'var(--dd-amber)' }}>{`--${p.name.replace(/_/g, '-')}`}</span>);
-        }
-      } else {
-        parts.push(' ');
-        parts.push(<span key={`flag-${p.name}`} style={{ color: 'var(--dd-amber)' }}>{`--${p.name.replace(/_/g, '-')}`}</span>);
-        parts.push(' ');
-        parts.push(<span key={`val-${p.name}`} style={{ color: 'var(--dd-green)' }}>{val}</span>);
-      }
-    }
-    return parts;
-  })();
-
-  const copyCommand = () => {
-    const parts: string[] = [`devdash run ${name.toLowerCase().replace(/\s+/g, '-')}`];
-    for (const p of params) {
-      const val = values[p.name];
-      if (!val && !p.required) continue;
-      if (p.type === 'toggle') {
-        if (val === 'true') parts.push(`--${p.name.replace(/_/g, '-')}`);
-      } else {
-        parts.push(`--${p.name.replace(/_/g, '-')} ${val}`);
-      }
-    }
-    navigator.clipboard.writeText(parts.join(' ')).catch(() => {});
-  };
-
   const canRun = params
     .filter((p) => p.required)
     .every((p) => (values[p.name] ?? '').trim() !== '');
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 1000,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Scrim — click to dismiss */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background: 'rgba(7,7,10,0.65)',
-          backdropFilter: 'blur(4px)',
-        }}
-        onClick={onCancel}
-      />
+    <div className="modal-backdrop">
+      <div className="modal-scrim" onClick={onCancel} />
 
-      {/* Modal card */}
-      <div
-        style={{
-          position: 'relative',
-          zIndex: 10,
-          width: 520,
-          maxWidth: '90%',
-          background: 'var(--dd-surface-2)',
-          border: '1px solid var(--dd-line-2)',
-          borderRadius: 10,
-          boxShadow: '0 20px 60px -10px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.02) inset',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
+      <div className="modal-card" style={{ width: 520, maxWidth: '90%', maxHeight: '85vh' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div
-          style={{
-            padding: '14px 18px 12px',
-            borderBottom: '1px solid var(--dd-line)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-          }}
-        >
+        <div style={{
+          padding: '18px 22px 16px',
+          borderBottom: '1px solid var(--dd-line)',
+          display: 'flex', alignItems: 'center', gap: 14,
+        }}>
           <Glyph ch={glyph.ch} color={glyph.color} />
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--dd-text)' }}>
-              Run · {name}
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--dd-text)', letterSpacing: -0.2 }}>
+              Run {name}
             </div>
-            <div style={{ fontSize: 11, color: 'var(--dd-text-3)', marginTop: 1 }}>
+            <div style={{ fontSize: 11, color: 'var(--dd-text-3)', marginTop: 2 }}>
               {params.length} parameter{params.length !== 1 ? 's' : ''}
-              {requiredCount > 0 && `, ${requiredCount} required`}
-              {estimatedTime && ` · ~${estimatedTime} estimated`}
+              {requiredCount > 0 && ` · ${requiredCount} required`}
+              {estimatedTime && ` · ~${estimatedTime}`}
             </div>
           </div>
-          <button
-            style={{
-              width: 24,
-              height: 24,
-              padding: 0,
-              border: 0,
-              background: 'transparent',
-              color: 'var(--dd-text-3)',
-              cursor: 'pointer',
-              borderRadius: 4,
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            onClick={onCancel}
-          >
+          <button className="btn btn-ghost btn-sm" onClick={onCancel} style={{ padding: 4 }}>
             <Icon name="close" size={16} />
           </button>
         </div>
 
-        {/* Body — fields */}
-        <div
-          style={{
-            padding: '18px 18px 6px',
-            overflowY: 'auto',
-            maxHeight: 'calc(100vh - 260px)',
-          }}
-        >
+        {/* Body */}
+        <div style={{
+          padding: '20px 22px 8px',
+          overflowY: 'auto',
+          flex: 1,
+        }}>
           {params.map((param) => {
             const val = values[param.name] ?? '';
-
-            if (param.type === 'text') {
-              return (
-                <Field
-                  key={param.name}
-                  label={param.name}
-                  type="text"
-                  required={param.required}
-                  help={undefined}
-                >
-                  <div style={{ position: 'relative' }}>
-                    <Icon
-                      name="edit"
-                      size={14}
-                      style={{ position: 'absolute', left: 9, top: 8, color: 'var(--dd-text-4)', pointerEvents: 'none' }}
-                    />
-                    <input
-                      className="input mono"
-                      value={val}
-                      placeholder={param.default ?? param.name}
-                      onChange={(e) => setValue(param.name, e.target.value)}
-                      style={{ paddingLeft: 30, fontSize: 13 }}
-                    />
-                  </div>
-                </Field>
-              );
-            }
 
             if (param.type === 'toggle') {
               const isOn = val === 'true';
               return (
-                <Field
-                  key={param.name}
-                  label={param.name}
-                  type="toggle"
-                  required={param.required}
-                  help={undefined}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <button
-                      onClick={() => setValue(param.name, isOn ? 'false' : 'true')}
-                      style={{
-                        width: 32,
-                        height: 18,
-                        borderRadius: 9,
-                        padding: 2,
-                        background: isOn ? 'var(--dd-amber)' : 'var(--dd-surface-3)',
-                        border: `1px solid ${isOn ? 'var(--dd-amber)' : 'var(--dd-line-2)'}`,
-                        cursor: 'pointer',
-                        position: 'relative',
-                        transition: 'background 120ms',
-                        flexShrink: 0,
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 12,
-                          height: 12,
-                          borderRadius: 6,
-                          background: isOn ? '#0a0a0c' : 'var(--dd-text-3)',
-                          transform: `translateX(${isOn ? 14 : 0}px)`,
-                          transition: 'transform 120ms',
-                        }}
-                      />
-                    </button>
-                    <span
-                      className="mono"
-                      style={{ fontSize: 12, color: isOn ? 'var(--dd-amber)' : 'var(--dd-text-2)' }}
-                    >
+                <Field key={param.name} label={param.name} type="toggle" required={param.required}>
+                  <button
+                    onClick={() => setValue(param.name, isOn ? 'false' : 'true')}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12,
+                      padding: '10px 14px', borderRadius: 10, width: '100%',
+                      background: isOn ? 'rgba(52,211,153,0.06)' : 'var(--dd-surface-3)',
+                      border: `1px solid ${isOn ? 'rgba(52,211,153,0.2)' : 'var(--dd-line)'}`,
+                      cursor: 'pointer', fontFamily: 'inherit',
+                      transition: 'all 150ms ease',
+                    }}
+                  >
+                    <div style={{
+                      width: 36, height: 20, borderRadius: 10,
+                      background: isOn ? 'var(--dd-green)' : 'var(--dd-surface)',
+                      position: 'relative', flexShrink: 0,
+                      transition: 'background 150ms ease',
+                      border: `1px solid ${isOn ? 'transparent' : 'var(--dd-line-2)'}`,
+                    }}>
+                      <div style={{
+                        width: 16, height: 16, borderRadius: '50%',
+                        background: '#fff',
+                        position: 'absolute', top: 1,
+                        left: isOn ? 17 : 1,
+                        transition: 'left 150ms ease',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                      }} />
+                    </div>
+                    <span className="mono" style={{
+                      fontSize: 12, fontWeight: 600,
+                      color: isOn ? 'var(--dd-green)' : 'var(--dd-text-3)',
+                    }}>
                       {isOn ? 'true' : 'false'}
                     </span>
-                    {isOn && (
-                      <span style={{ fontSize: 11, color: 'var(--dd-amber)' }}>
-                        <Icon name="warning_amber" size={12} style={{ verticalAlign: '-2px', marginRight: 3 }} />
-                        enabled
-                      </span>
-                    )}
-                  </div>
+                  </button>
                 </Field>
               );
             }
 
             if (param.type === 'select' && param.options) {
               return (
-                <Field
-                  key={param.name}
-                  label={param.name}
-                  type="select"
-                  required={param.required}
-                  help={undefined}
-                >
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <Field key={param.name} label={param.name} type="select" required={param.required}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {param.options.map((opt) => {
                       const selected = val === opt;
                       return (
@@ -318,27 +166,19 @@ export default function ParamModal({ workflow, onRun, onCancel }: Props) {
                           key={opt}
                           onClick={() => setValue(param.name, opt)}
                           style={{
-                            flex: '1 1 auto',
-                            minWidth: 80,
-                            padding: '8px 10px',
-                            background: selected ? 'rgba(96,165,250,0.08)' : 'var(--dd-surface-3)',
-                            border: `1px solid ${selected ? 'var(--dd-blue)' : 'var(--dd-line)'}`,
-                            borderRadius: 6,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'flex-start',
-                            gap: 2,
-                            fontFamily: 'inherit',
-                            color: 'var(--dd-text)',
-                            textAlign: 'left',
-                            transition: 'border-color 120ms, background 120ms',
+                            flex: '1 1 auto', minWidth: 90,
+                            padding: '10px 14px',
+                            background: selected ? 'var(--dd-accent-dim)' : 'var(--dd-surface-3)',
+                            border: `1.5px solid ${selected ? 'var(--dd-accent)' : 'var(--dd-line)'}`,
+                            borderRadius: 10, cursor: 'pointer',
+                            fontFamily: 'inherit', textAlign: 'center',
+                            transition: 'all 150ms ease',
                           }}
                         >
-                          <span
-                            className="mono"
-                            style={{ fontSize: 12, color: selected ? 'var(--dd-blue)' : 'var(--dd-text)' }}
-                          >
+                          <span className="mono" style={{
+                            fontSize: 13, fontWeight: 600,
+                            color: selected ? 'var(--dd-accent-bright)' : 'var(--dd-text-2)',
+                          }}>
                             {opt}
                           </span>
                         </button>
@@ -349,94 +189,46 @@ export default function ParamModal({ workflow, onRun, onCancel }: Props) {
               );
             }
 
-            // Fallback: text input
+            if (param.type === 'textarea') {
+              return (
+                <Field key={param.name} label={param.label ?? param.name} type="textarea" required={param.required}>
+                  <textarea
+                    className="input mono"
+                    value={val}
+                    placeholder={param.default ?? `Enter ${param.label ?? param.name}...`}
+                    onChange={(e) => setValue(param.name, e.target.value)}
+                    rows={4}
+                    style={{
+                      fontSize: 12, resize: 'vertical', lineHeight: 1.5,
+                      minHeight: 80, fontFamily: 'var(--font-mono)',
+                    }}
+                    autoFocus={params.indexOf(param) === 0}
+                  />
+                </Field>
+              );
+            }
+
             return (
-              <Field key={param.name} label={param.name} type={param.type} required={param.required}>
+              <Field key={param.name} label={param.label ?? param.name} type="text" required={param.required}>
                 <input
                   className="input mono"
                   value={val}
                   placeholder={param.default ?? param.name}
                   onChange={(e) => setValue(param.name, e.target.value)}
                   style={{ fontSize: 13 }}
+                  autoFocus={params.indexOf(param) === 0}
                 />
               </Field>
             );
           })}
         </div>
 
-        {/* CLI preview (collapsible) */}
-        <details
-          open={previewOpen}
-          onToggle={(e) => setPreviewOpen((e.currentTarget as HTMLDetailsElement).open)}
-          style={{ padding: '4px 18px 12px' }}
-        >
-          <summary
-            style={{
-              cursor: 'pointer',
-              listStyle: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              fontSize: 11,
-              color: 'var(--dd-text-3)',
-              marginBottom: 6,
-              userSelect: 'none',
-            }}
-          >
-            <Icon
-              name={previewOpen ? 'expand_more' : 'chevron_right'}
-              size={14}
-            />
-            <span>Will run as</span>
-            <span className="mono">{name.toLowerCase().replace(/\s+/g, '-')}</span>
-            <span style={{ flex: 1 }} />
-            <button
-              className="btn btn-ghost btn-sm"
-              style={{ padding: '2px 6px', fontSize: 10 }}
-              onClick={(e) => { e.preventDefault(); copyCommand(); }}
-            >
-              <Icon name="content_copy" size={10} />
-              Copy command
-            </button>
-          </summary>
-          <div className="terminal" style={{ fontSize: 11, padding: '8px 10px', lineHeight: '18px' }}>
-            <div className="term-line">
-              <span className="prompt">$</span>{' '}
-              {cliPreview}
-            </div>
-          </div>
-        </details>
-
         {/* Footer */}
-        <div
-          style={{
-            padding: '10px 18px',
-            borderTop: '1px solid var(--dd-line)',
-            background: 'var(--dd-surface)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-          }}
-        >
-          <label
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              fontSize: 12,
-              color: 'var(--dd-text-2)',
-              cursor: 'pointer',
-              userSelect: 'none',
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={saveDefaults}
-              onChange={(e) => setSaveDefaults(e.target.checked)}
-              style={{ accentColor: 'var(--dd-blue)' }}
-            />
-            <span>Save these values as new defaults</span>
-          </label>
+        <div style={{
+          padding: '14px 22px',
+          borderTop: '1px solid var(--dd-line)',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
           <span style={{ flex: 1 }} />
           <button className="btn btn-ghost" onClick={onCancel}>
             Cancel <Kbd>Esc</Kbd>
@@ -447,11 +239,9 @@ export default function ParamModal({ workflow, onRun, onCancel }: Props) {
             disabled={!canRun}
             style={!canRun ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
           >
-            <Icon name="play_arrow" size={14} />
+            <Icon name="play_arrow" size={15} />
             Run workflow
-            <span style={{ marginLeft: 6, opacity: 0.6 }}>
-              <Kbd>⌘↵</Kbd>
-            </span>
+            <span style={{ marginLeft: 4, opacity: 0.6 }}><Kbd>⌘↵</Kbd></span>
           </button>
         </div>
       </div>

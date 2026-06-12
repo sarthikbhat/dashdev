@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Titlebar, Sidebar, StatusBar, Icon, Badge, Glyph, Tag, Kbd } from '../components';
+import { Titlebar, Sidebar, StatusBar, Icon, Badge, Glyph, Tag, Kbd, DialogModal } from '../components';
 import { useWorkflows } from '../hooks/useWorkflows';
 import { useProcesses } from '../hooks/useProcesses';
 import { getWorkflow, saveWorkflow } from '../api';
@@ -215,6 +215,7 @@ function FormMode({ workflow, formStateRef }: FormModeProps) {
   const [icon, setIconVal] = useState(workflow?.icon ?? 'W');
   const [selectedColor, setSelectedColor] = useState('var(--dd-blue)');
   const [tags, setTags] = useState<string[]>(workflow?.tags ?? []);
+  const [showTagDialog, setShowTagDialog] = useState(false);
   const [params, setParams] = useState<WorkflowParam[]>(workflow?.params ?? []);
   const [steps, setSteps] = useState<LocalStep[]>(workflowToSteps(workflow));
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -379,17 +380,25 @@ function FormMode({ workflow, formStateRef }: FormModeProps) {
           <button
             className="btn btn-ghost btn-sm"
             style={{ padding: '2px 6px', fontSize: 11 }}
-            onClick={() => {
-              const tag = prompt('Enter tag name:');
-              if (tag && tag.trim() && !tags.includes(tag.trim())) {
-                setTags([...tags, tag.trim()]);
-              }
-            }}
+            onClick={() => setShowTagDialog(true)}
           >
             <Icon name="add" size={11} />
             Add tag
           </button>
         </div>
+        {showTagDialog && (
+          <DialogModal
+            mode="prompt"
+            title="Add tag"
+            placeholder="Tag name"
+            confirmLabel="Add"
+            onConfirm={(v) => {
+              if (!tags.includes(v)) setTags([...tags, v]);
+              setShowTagDialog(false);
+            }}
+            onCancel={() => setShowTagDialog(false)}
+          />
+        )}
       </div>
 
       <hr style={{ border: 0, borderTop: '1px solid var(--dd-line)', margin: '4px 0 18px' }} />
@@ -463,6 +472,7 @@ function FormMode({ workflow, formStateRef }: FormModeProps) {
             <div style={{ fontSize: 11, color: 'var(--dd-text-3)', marginBottom: 4 }}>Type</div>
             <select className="input" style={{ fontSize: 12 }} value={newParamType} onChange={(e) => setNewParamType(e.target.value as any)}>
               <option value="text">text</option>
+              <option value="textarea">textarea</option>
               <option value="select">select</option>
               <option value="toggle">toggle</option>
             </select>

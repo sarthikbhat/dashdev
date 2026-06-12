@@ -4,3 +4,5 @@ ui/node_modules
 ui/dist
 *.db
 .devdash/
+.DS_Store
+*.tgz

@@ -22,9 +22,10 @@ export function workflowsRouter(db: Database): Router {
 
   // PUT /:id — create/update UI-created workflow (requires name + steps in body)
   router.put("/:id", (req, res) => {
-    const { name, steps, description, icon, tags, env, params } = req.body as {
+    const { name, steps, nodes, description, icon, tags, env, params } = req.body as {
       name?: unknown;
       steps?: unknown;
+      nodes?: unknown;
       description?: string;
       icon?: string;
       tags?: string[];
@@ -45,6 +46,7 @@ export function workflowsRouter(db: Database): Router {
       id: req.params.id,
       name,
       steps: steps as import("../core/types.js").WorkflowStep[],
+      nodes: Array.isArray(nodes) ? nodes as import("../core/types.js").FlowNode[] : undefined,
       description,
       icon,
       tags,
@@ -57,17 +59,11 @@ export function workflowsRouter(db: Database): Router {
     res.json(workflow);
   });
 
-  // DELETE /:id — delete workflow (only source="ui", 400 otherwise)
+  // DELETE /:id
   router.delete("/:id", (req, res) => {
     const workflow = db.getWorkflow(req.params.id);
     if (!workflow) {
       res.status(404).json({ error: "Workflow not found" });
-      return;
-    }
-    if (workflow.source !== "ui") {
-      res
-        .status(400)
-        .json({ error: "Only UI-created workflows can be deleted via the API" });
       return;
     }
     db.deleteWorkflow(req.params.id);

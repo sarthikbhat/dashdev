@@ -1,13 +1,30 @@
 {
   "name": "devdash",
   "version": "0.1.0",
-  "description": "Local web dashboard for running multi-step developer workflows",
+  "description": "Local development dashboard — services, workflows, CI/CD, Redis, and git repos in one place",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sarthikbhat/devdash.git"
+  },
+  "keywords": ["devtools", "dashboard", "workflows", "services", "local-dev"],
+  "license": "MIT",
+  "author": "Sarthik Bhat",
   "type": "module",
+  "files": [
+    "bin/devdash.js",
+    "dist/server/api/*.js",
+    "dist/server/core/*.js",
+    "dist/server/index.js",
+    "dist/ui/**"
+  ],
+  "bin": {
+    "devdash": "./bin/devdash.js"
+  },
   "scripts": {
     "dev": "tsx watch server/index.ts",
     "dev:ui": "cd ui && npm run dev",
     "dev:all": "concurrently \"npm run dev\" \"npm run dev:ui\"",
-    "build:ui": "cd ui && npm run build",
+    "build:ui": "cd ui && npm run build && cp -r dist ../dist/ui",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server/index.js",
     "test": "vitest run",
@@ -17,6 +34,7 @@
     "better-sqlite3": "^11.0.0",
     "cors": "^2.8.5",
     "express": "^4.21.0",
+    "ioredis": "^5.11.0",
     "js-yaml": "^4.1.0",
     "socket.io": "^4.7.0"
   },

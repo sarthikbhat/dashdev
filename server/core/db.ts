@@ -1,10 +1,11 @@
 import BetterSqlite3 from "better-sqlite3";
-import { randomUUID } from "crypto";
+import { randomUUID, createCipheriv, createDecipheriv, randomBytes, scryptSync } from "crypto";
 import type {
   Workflow,
   WorkflowSource,
   WorkflowStep,
   WorkflowParam,
+  FlowNode,
   Run,
   RunStatus,
   RunStep,
@@ -30,6 +31,7 @@ export interface UpsertWorkflowInput {
   env?: Record<string, string>;
   params?: WorkflowParam[];
   steps: WorkflowStep[];
+  nodes?: FlowNode[];
   source: WorkflowSource;
   file_path?: string;
 }
@@ -104,6 +106,8 @@ interface ServiceRow {
   health_check_value: string | null;
   start_command: string | null;
   stop_command: string | null;
+  setup_command: string | null;
+  workdir: string | null;
   category: string;
   log_file: string | null;
   created_at: string;
@@ -213,7 +217,22 @@ export class Database {
         service_ids TEXT NOT NULL DEFAULT '[]',
         created_at  TEXT NOT NULL DEFAULT (datetime('now'))
       );
+
+      CREATE TABLE IF NOT EXISTS settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
     `);
+
+    // Add setup_command and workdir columns if missing
+    const cols = this.db.prepare("PRAGMA table_info(services)").all() as { name: string }[];
+    const colNames = new Set(cols.map((c) => c.name));
+    if (!colNames.has("setup_command")) {
+      this.db.exec("ALTER TABLE services ADD COLUMN setup_command TEXT");
+    }
+    if (!colNames.has("workdir")) {
+      this.db.exec("ALTER TABLE services ADD COLUMN workdir TEXT");
+    }
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -226,6 +245,7 @@ export class Database {
     const definition = JSON.parse(row.definition) as {
       steps?: WorkflowStep[];
       env?: Record<string, string>;
+      nodes?: FlowNode[];
     };
     return {
       id: row.id,
@@ -236,6 +256,7 @@ export class Database {
       env: definition.env ?? (JSON.parse(row.env) as Record<string, string>),
       params: JSON.parse(row.params) as WorkflowParam[],
       steps: (definition.steps ?? []) as WorkflowStep[],
+      nodes: definition.nodes,
       source: row.source as WorkflowSource,
       file_path: row.file_path ?? undefined,
       created_at: row.created_at,
@@ -300,7 +321,11 @@ export class Database {
 
   upsertWorkflow(input: UpsertWorkflowInput): void {
     const now = this.now();
-    const definition = JSON.stringify({ steps: input.steps, env: input.env ?? {} });
+    const definition = JSON.stringify({
+      steps: input.steps,
+      env: input.env ?? {},
+      ...(input.nodes ? { nodes: input.nodes } : {}),
+    });
 
     const existing = this.db
       .prepare("SELECT created_at FROM workflows WHERE id = ?")
@@ -585,6 +610,8 @@ export class Database {
       health_check_value: row.health_check_value ?? undefined,
       start_command: row.start_command ?? undefined,
       stop_command: row.stop_command ?? undefined,
+      setup_command: row.setup_command ?? undefined,
+      workdir: row.workdir ?? undefined,
       category: row.category as ServiceCategory,
       log_file: row.log_file ?? undefined,
       created_at: row.created_at,
@@ -599,6 +626,8 @@ export class Database {
     health_check_value?: string;
     start_command?: string;
     stop_command?: string;
+    setup_command?: string;
+    workdir?: string;
     category?: string;
     log_file?: string;
   }): string {
@@ -606,8 +635,8 @@ export class Database {
     const now = this.now();
     this.db
       .prepare(
-        `INSERT INTO services (id, name, port, health_check_type, health_check_value, start_command, stop_command, category, log_file, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO services (id, name, port, health_check_type, health_check_value, start_command, stop_command, setup_command, workdir, category, log_file, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         id,
@@ -617,6 +646,8 @@ export class Database {
         input.health_check_value ?? null,
         input.start_command ?? null,
         input.stop_command ?? null,
+        input.setup_command ?? null,
+        input.workdir ?? null,
         input.category ?? "app",
         input.log_file ?? null,
         now,
@@ -648,6 +679,8 @@ export class Database {
       health_check_value: string;
       start_command: string;
       stop_command: string;
+      setup_command: string;
+      workdir: string;
       category: string;
       log_file: string;
     }>
@@ -662,6 +695,8 @@ export class Database {
     if (input.health_check_value !== undefined) { fields.push("health_check_value = ?"); values.push(input.health_check_value); }
     if (input.start_command !== undefined) { fields.push("start_command = ?"); values.push(input.start_command); }
     if (input.stop_command !== undefined) { fields.push("stop_command = ?"); values.push(input.stop_command); }
+    if (input.setup_command !== undefined) { fields.push("setup_command = ?"); values.push(input.setup_command); }
+    if (input.workdir !== undefined) { fields.push("workdir = ?"); values.push(input.workdir); }
     if (input.category !== undefined) { fields.push("category = ?"); values.push(input.category); }
     if (input.log_file !== undefined) { fields.push("log_file = ?"); values.push(input.log_file); }
 
@@ -733,6 +768,52 @@ export class Database {
 
   deleteServiceGroup(id: string): void {
     this.db.prepare("DELETE FROM service_groups WHERE id = ?").run(id);
+  }
+
+  // ─── Settings (key-value) ─────────────────────────────────────────────────────
+
+  private static ENCRYPTION_KEY = scryptSync("devdash-local-encryption", "devdash-salt", 32);
+
+  private encrypt(text: string): string {
+    const iv = randomBytes(16);
+    const cipher = createCipheriv("aes-256-cbc", Database.ENCRYPTION_KEY, iv);
+    const encrypted = Buffer.concat([cipher.update(text, "utf8"), cipher.final()]);
+    return iv.toString("hex") + ":" + encrypted.toString("hex");
+  }
+
+  private decrypt(text: string): string {
+    const [ivHex, encHex] = text.split(":");
+    const iv = Buffer.from(ivHex, "hex");
+    const encrypted = Buffer.from(encHex, "hex");
+    const decipher = createDecipheriv("aes-256-cbc", Database.ENCRYPTION_KEY, iv);
+    return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
+  }
+
+  getSetting(key: string): string | null {
+    const row = this.db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
+    return row ? row.value : null;
+  }
+
+  setSetting(key: string, value: string): void {
+    this.db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run(key, value);
+  }
+
+  deleteSetting(key: string): void {
+    this.db.prepare("DELETE FROM settings WHERE key = ?").run(key);
+  }
+
+  getEncryptedSetting(key: string): string | null {
+    const raw = this.getSetting(key);
+    if (!raw) return null;
+    try {
+      return this.decrypt(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  setEncryptedSetting(key: string, value: string): void {
+    this.setSetting(key, this.encrypt(value));
   }
 
   // ─── Lifecycle ────────────────────────────────────────────────────────────────

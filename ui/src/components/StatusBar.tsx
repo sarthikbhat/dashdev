@@ -42,96 +42,55 @@ export default function StatusBar({ processCount, activeRuns, extra }: Props) {
     };
   }, []);
 
-  const sep = (
-    <span style={{ color: 'var(--dd-line-2)', margin: '0 6px' }}>│</span>
-  );
-
   return (
     <div
       style={{
         gridArea: 'status',
         height: 28,
-        background: '#07070a',
+        background: 'var(--dd-surface)',
         borderTop: '1px solid var(--dd-line)',
         display: 'flex',
         alignItems: 'center',
-        paddingLeft: 12,
-        paddingRight: 12,
+        paddingLeft: 14,
+        paddingRight: 14,
         fontSize: 11,
         fontFamily: 'var(--font-mono)',
-        color: 'var(--dd-text-3)',
-        gap: 0,
+        color: 'var(--dd-text-4)',
+        gap: 14,
         flexShrink: 0,
         userSelect: 'none',
       }}
     >
-      {/* Server status + uptime */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-        {/* Pulse dot */}
         <div
           style={{
-            width: 6,
-            height: 6,
+            width: 5,
+            height: 5,
             borderRadius: '50%',
             background: serverUp ? 'var(--dd-green)' : 'var(--dd-red)',
-            boxShadow: serverUp
-              ? '0 0 0 2px rgba(52,211,153,0.25)'
-              : '0 0 0 2px rgba(248,113,113,0.25)',
-            animation: serverUp ? 'dd-pulse 2s ease infinite' : 'none',
           }}
         />
-        <span style={{ color: serverUp ? 'var(--dd-green)' : 'var(--dd-red)' }}>
-          {serverUp ? 'Server up' : 'Server down'}
+        <span style={{ color: serverUp ? 'var(--dd-text-3)' : 'var(--dd-red)' }}>
+          {serverUp ? 'Connected' : 'Disconnected'}
         </span>
         {uptime !== null && (
-          <span style={{ color: 'var(--dd-text-4)' }}>· {formatUptime(uptime)}</span>
+          <span>{formatUptime(uptime)}</span>
         )}
       </div>
 
-      {sep}
+      <span>{processCount} proc</span>
 
-      {/* CPU/MEM (placeholder) */}
-      <span>CPU —</span>
-      <span style={{ marginLeft: 8 }}>MEM —</span>
-
-      {sep}
-
-      {/* Process + run counts */}
-      <span>
-        <span style={{ color: 'var(--dd-text-2)' }}>{processCount}</span>
-        {' '}proc
-      </span>
-      {sep}
-      <span>
-        <span style={{ color: activeRuns > 0 ? 'var(--dd-amber)' : 'var(--dd-text-2)' }}>
-          {activeRuns}
+      {activeRuns > 0 && (
+        <span style={{ color: 'var(--dd-amber)' }}>
+          {activeRuns} running
         </span>
-        {' '}runs
-      </span>
-
-      {/* Extra content (run status, etc.) */}
-      {extra && (
-        <>
-          {sep}
-          {extra}
-        </>
       )}
 
-      {/* Right side: node version, port, ws */}
-      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 0 }}>
-        <span>node v20</span>
-        {sep}
-        <span>:3847</span>
-        {sep}
-        <span style={{ color: 'var(--dd-text-4)' }}>ws://localhost:3847</span>
-      </div>
+      {extra}
 
-      <style>{`
-        @keyframes dd-pulse {
-          0%, 100% { box-shadow: 0 0 0 2px rgba(52,211,153,0.25); }
-          50% { box-shadow: 0 0 0 4px rgba(52,211,153,0.10); }
-        }
-      `}</style>
+      <div style={{ marginLeft: 'auto' }}>
+        <span>:3847</span>
+      </div>
     </div>
   );
 }

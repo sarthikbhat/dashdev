@@ -1,113 +1,151 @@
+import { useLocation, useNavigate } from 'react-router-dom';
 import Icon from './Icon';
-import Kbd from './Kbd';
+
+const NAV_ITEMS = [
+  { path: '/services', label: 'Services', icon: 'dns' },
+  { path: '/workflows', label: 'Workflows', icon: 'play_circle' },
+  { path: '/redis', label: 'Redis', icon: 'storage' },
+];
 
 interface Props {
   path: string;
 }
 
 export default function Titlebar({ path }: Props) {
-  // Build breadcrumb from path (e.g. "Edit · Deploy Forge App" → ["Edit", "Deploy Forge App"])
-  const crumbs = path.split(/\s*[·›]\s*/).filter(Boolean);
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const isActive = (itemPath: string) => {
+    if (itemPath === '/workflows') {
+      return location.pathname.startsWith('/workflow') || location.pathname === '/history';
+    }
+    return location.pathname.startsWith(itemPath);
+  };
 
   return (
     <div
       style={{
         gridArea: 'header',
-        height: 44,
+        height: 52,
         background: 'var(--dd-surface)',
         display: 'flex',
         alignItems: 'center',
-        paddingLeft: 16,
-        paddingRight: 16,
+        paddingLeft: 18,
+        paddingRight: 18,
         borderBottom: '1px solid var(--dd-line)',
-        gap: 16,
+        gap: 0,
         flexShrink: 0,
         userSelect: 'none',
       }}
     >
-      {/* Logo + name */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+      {/* Logo */}
+      <button
+        onClick={() => navigate('/')}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          flexShrink: 0,
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          padding: '4px 14px 4px 0',
+          marginRight: 6,
+        }}
+      >
         <div
           style={{
-            width: 22,
-            height: 22,
-            borderRadius: 5,
-            background: 'linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%)',
+            width: 28,
+            height: 28,
+            borderRadius: 8,
+            background: 'linear-gradient(135deg, #7c6ef6 0%, #c084fc 100%)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontWeight: 700,
-            fontSize: 13,
+            fontWeight: 800,
+            fontSize: 15,
             color: '#fff',
             letterSpacing: -0.5,
+            boxShadow: '0 2px 8px rgba(124,110,246,0.25)',
           }}
         >
           D
         </div>
-        <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--dd-text)' }}>
+        <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--dd-text)', letterSpacing: -0.3 }}>
           DevDash
         </span>
-      </div>
+      </button>
 
-      {/* Breadcrumb */}
-      <div
-        style={{
-          flex: 1,
+      {/* Divider */}
+      <div style={{ width: 1, height: 22, background: 'var(--dd-line-2)', marginRight: 10, flexShrink: 0 }} />
+
+      {/* Nav links */}
+      <nav style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        {NAV_ITEMS.map((item) => {
+          const active = isActive(item.path);
+          return (
+            <button
+              key={item.path}
+              onClick={() => navigate(item.path)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 14px',
+                borderRadius: 8,
+                border: 'none',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontSize: 13,
+                fontWeight: active ? 600 : 400,
+                background: active ? 'rgba(124,110,246,0.10)' : 'transparent',
+                color: active ? 'var(--dd-blue-bright)' : 'var(--dd-text-3)',
+                transition: 'all 150ms ease',
+              }}
+              onMouseEnter={(e) => {
+                if (!active) {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                  e.currentTarget.style.color = 'var(--dd-text-2)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!active) {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = 'var(--dd-text-3)';
+                }
+              }}
+            >
+              <Icon name={item.icon} size={16} />
+              {item.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Spacer */}
+      <div style={{ flex: 1 }} />
+
+      {/* Breadcrumb context */}
+      {path !== 'Home' && !['Services', 'Workflows', 'Redis', 'Run History'].includes(path) && (
+        <div style={{
           display: 'flex',
           alignItems: 'center',
           gap: 6,
-          minWidth: 0,
-          overflow: 'hidden',
-        }}
-      >
-        <span
-          style={{
-            color: 'var(--dd-text-4)',
-            fontSize: 14,
-            lineHeight: 1,
-            flexShrink: 0,
-          }}
-        >
-          ›
-        </span>
-        {crumbs.map((crumb, i) => (
-          <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-            {i > 0 && (
-              <span style={{ color: 'var(--dd-text-4)', fontSize: 12, flexShrink: 0 }}>›</span>
-            )}
-            <span
-              style={{
-                fontSize: 12,
-                color: i === crumbs.length - 1 ? 'var(--dd-text-2)' : 'var(--dd-text-3)',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {crumb}
-            </span>
+          fontSize: 12,
+          color: 'var(--dd-text-4)',
+          marginRight: 12,
+        }}>
+          <span style={{ color: 'var(--dd-text-4)' }}>›</span>
+          <span style={{
+            maxWidth: 200,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}>
+            {path}
           </span>
-        ))}
-      </div>
-
-      {/* Right side controls */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-        <span
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            color: 'var(--dd-text-4)',
-            padding: '2px 6px',
-            background: 'var(--dd-surface-3)',
-            borderRadius: 4,
-            border: '1px solid var(--dd-line)',
-          }}
-        >
-          v0.1.0
-        </span>
-        <Icon name="search" size={15} style={{ color: 'var(--dd-text-3)', cursor: 'pointer' }} />
-        <Kbd>⌘K</Kbd>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

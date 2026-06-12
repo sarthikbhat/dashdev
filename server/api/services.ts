@@ -1,12 +1,70 @@
 import { Router } from "express";
 import { exec, spawn as nodeSpawn } from "node:child_process";
 import { promisify } from "node:util";
+import fs from "node:fs";
+import path from "node:path";
 import type { Database } from "../core/db.js";
 import type { ServiceMonitor } from "../core/service-monitor.js";
 import type { ProcessManager } from "../core/process-manager.js";
+import type { Service } from "../core/types.js";
 import { parseBackendctl } from "../core/backendctl-parser.js";
 
 const execAsync = promisify(exec);
+
+function extractWorkdir(startCommand: string): string | undefined {
+  const cdMatch = startCommand.match(/cd\s+["']?([^"'&;]+)["']?/);
+  if (cdMatch) {
+    return cdMatch[1].trim().replace(/\$HOME/g, process.env.HOME ?? "~");
+  }
+  return undefined;
+}
+
+function detectSetupCommand(workdir: string): string | undefined {
+  try {
+    const files = fs.readdirSync(workdir);
+    if (files.includes("Gemfile")) return "bundle install";
+    if (files.includes("pnpm-lock.yaml")) return "pnpm install";
+    if (files.includes("yarn.lock")) return "yarn install";
+    if (files.includes("package-lock.json")) return "npm install";
+    if (files.includes("package.json")) return "npm install";
+    if (files.includes("requirements.txt")) return "pip install -r requirements.txt";
+    if (files.includes("go.mod")) return "go mod download";
+  } catch {
+    // workdir doesn't exist or isn't readable
+  }
+  return undefined;
+}
+
+function startServiceProcess(
+  service: Service,
+  db: Database,
+): { logFile: string } {
+  const logDir = "/tmp/devdash-logs";
+  const logFile = `${logDir}/${service.name.replace(/[^a-zA-Z0-9_-]/g, "_")}.log`;
+  const escaped = service.start_command!.replace(/'/g, "'\\''");
+
+  const workdir = service.workdir ?? extractWorkdir(service.start_command!);
+  const setupCmd = service.setup_command ?? (workdir ? detectSetupCommand(workdir) : undefined);
+
+  let fullCmd = `mkdir -p ${logDir} && : > '${logFile}'`;
+  if (setupCmd && workdir) {
+    const escapedSetup = setupCmd.replace(/'/g, "'\\''");
+    fullCmd += ` && cd '${workdir}' && ${escapedSetup} >> '${logFile}' 2>&1`;
+  }
+  fullCmd += ` && nohup zsh -c '${escaped}' >> '${logFile}' 2>&1 &`;
+
+  const child = nodeSpawn("zsh", ["-l", "-c", fullCmd], {
+    detached: true,
+    stdio: "ignore",
+  });
+  child.unref();
+
+  if (!service.log_file) {
+    db.updateService(service.id, { log_file: logFile });
+  }
+
+  return { logFile };
+}
 
 export function servicesRouter(
   db: Database,
@@ -89,16 +147,10 @@ export function servicesRouter(
 
     res.status(202).json({ started: true, group_id: group.id });
 
-    // Start services as fully detached processes
     for (const serviceId of group.service_ids) {
       const service = db.getService(serviceId);
       if (!service?.start_command) continue;
-      const escaped = service.start_command.replace(/'/g, "'\\''");
-      const child = nodeSpawn("bash", ["-l", "-c", `nohup bash -c '${escaped}' > /dev/null 2>&1 &`], {
-        detached: true,
-        stdio: "ignore",
-      });
-      child.unref();
+      startServiceProcess(service, db);
     }
   });
 
@@ -149,6 +201,8 @@ export function servicesRouter(
           health_check_value: svc.health_check_value,
           start_command: svc.start_command,
           stop_command: svc.stop_command,
+          setup_command: svc.setup_command,
+          workdir: svc.workdir,
           category: svc.category,
         });
       }
@@ -194,6 +248,8 @@ export function servicesRouter(
       health_check_value,
       start_command,
       stop_command,
+      setup_command,
+      workdir,
       category,
       log_file,
     } = req.body as {
@@ -203,6 +259,8 @@ export function servicesRouter(
       health_check_value?: unknown;
       start_command?: unknown;
       stop_command?: unknown;
+      setup_command?: unknown;
+      workdir?: unknown;
       category?: unknown;
       log_file?: unknown;
     };
@@ -223,6 +281,8 @@ export function servicesRouter(
       health_check_value: typeof health_check_value === "string" ? health_check_value : undefined,
       start_command: typeof start_command === "string" ? start_command : undefined,
       stop_command: typeof stop_command === "string" ? stop_command : undefined,
+      setup_command: typeof setup_command === "string" ? setup_command : undefined,
+      workdir: typeof workdir === "string" ? workdir : undefined,
       category: typeof category === "string" ? category : undefined,
       log_file: typeof log_file === "string" ? log_file : undefined,
     });
@@ -245,6 +305,8 @@ export function servicesRouter(
       health_check_value,
       start_command,
       stop_command,
+      setup_command,
+      workdir,
       category,
       log_file,
     } = req.body as {
@@ -254,6 +316,8 @@ export function servicesRouter(
       health_check_value?: unknown;
       start_command?: unknown;
       stop_command?: unknown;
+      setup_command?: unknown;
+      workdir?: unknown;
       category?: unknown;
       log_file?: unknown;
     };
@@ -265,6 +329,8 @@ export function servicesRouter(
       health_check_value: typeof health_check_value === "string" ? health_check_value : undefined,
       start_command: typeof start_command === "string" ? start_command : undefined,
       stop_command: typeof stop_command === "string" ? stop_command : undefined,
+      setup_command: typeof setup_command === "string" ? setup_command : undefined,
+      workdir: typeof workdir === "string" ? workdir : undefined,
       category: typeof category === "string" ? category : undefined,
       log_file: typeof log_file === "string" ? log_file : undefined,
     });
@@ -295,17 +361,8 @@ export function servicesRouter(
       return;
     }
 
-    // Services must be fully detached — they should survive DevDash restarts.
-    // Don't use ProcessManager (it tracks and kills children on shutdown).
-    // Instead, spawn a fully detached process via nohup + disown pattern.
-    const escaped = service.start_command.replace(/'/g, "'\\''");
-    const child = nodeSpawn("bash", ["-l", "-c", `nohup bash -c '${escaped}' > /dev/null 2>&1 &`], {
-      detached: true,
-      stdio: "ignore",
-    });
-    child.unref();
-
-    res.status(202).json({ started: true });
+    const { logFile } = startServiceProcess(service, db);
+    res.status(202).json({ started: true, log_file: logFile });
   });
 
   // ─── POST /:id/stop ───────────────────────────────────────────────────────────
@@ -349,9 +406,8 @@ export function servicesRouter(
       // Wait 2 seconds
       await new Promise<void>((resolve) => setTimeout(resolve, 2000));
 
-      // Start
       if (service.start_command) {
-        pm.spawn({ command: service.start_command, type: "shell" }).catch(() => undefined);
+        startServiceProcess(service, db);
       }
     })().catch(() => undefined);
   });

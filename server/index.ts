@@ -17,6 +17,8 @@ import { workflowsRouter } from "./api/workflows.js";
 import { runsRouter } from "./api/runs.js";
 import { processesRouter } from "./api/processes.js";
 import { servicesRouter } from "./api/services.js";
+import { redisRouter } from "./api/redis.js";
+import { githubRouter } from "./api/github.js";
 import type { ServerToClientEvents, ClientToServerEvents } from "./core/types.js";
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -89,6 +91,9 @@ app.use("/api/workflows", workflowsRouter(db));
 app.use("/api/runs", runsRouter(db, runner));
 app.use("/api/processes", processesRouter(pm));
 
+app.use("/api/redis", redisRouter());
+app.use("/api/github", githubRouter(db));
+
 // Health endpoint
 app.get("/api/health", (_req, res) => {
   res.json({
@@ -102,7 +107,11 @@ app.get("/api/health", (_req, res) => {
 // ── Serve built UI ────────────────────────────────────────────────────────────
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const uiDistPath = path.resolve(__dirname, "../ui/dist");
+const uiDistCandidates = [
+  path.resolve(__dirname, "../ui/dist"),
+  path.resolve(__dirname, "../../ui/dist"),
+];
+const uiDistPath = uiDistCandidates.find((p) => fs.existsSync(p)) ?? uiDistCandidates[0];
 
 if (fs.existsSync(uiDistPath)) {
   app.use(express.static(uiDistPath));
@@ -141,8 +150,16 @@ runner.onLog = (data) => {
   io.emit("step:log", data);
 };
 
-// Socket client events
+// Socket client events — start/stop monitor based on connected clients
+let monitorRunning = false;
+
 io.on("connection", (socket) => {
+  if (!monitorRunning) {
+    monitor.start(5000);
+    monitorRunning = true;
+    console.log("[devdash] UI connected — health monitor started");
+  }
+
   socket.on("run:cancel", ({ run_id }) => {
     runner.cancelRun(run_id);
   });
@@ -152,8 +169,15 @@ io.on("connection", (socket) => {
   });
 
   socket.on("service:subscribe-logs", ({ service_id }) => {
-    // Implementation can be added later — just log for now
     console.log(`Client subscribed to logs for service ${service_id}`);
+  });
+
+  socket.on("disconnect", () => {
+    if (io.engine.clientsCount === 0) {
+      monitor.stop();
+      monitorRunning = false;
+      console.log("[devdash] No UI clients — health monitor stopped");
+    }
   });
 });
 
@@ -194,8 +218,6 @@ process.on("uncaughtException", (err) => {
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 await syncWorkflows();
-
-monitor.start(5000);
 
 server.listen(PORT, () => {
   console.log(`DevDash running at http://localhost:${PORT}`);

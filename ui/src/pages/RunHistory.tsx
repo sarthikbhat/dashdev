@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Titlebar, Sidebar, StatusBar, Icon, Badge, Glyph, Spinner } from '../components';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Icon, Badge, Glyph, Spinner } from '../components';
 import { useWorkflows } from '../hooks/useWorkflows';
 import { useRuns } from '../hooks/useRuns';
-import { useProcesses } from '../hooks/useProcesses';
 import { getRun } from '../api';
 import type { Run, RunStep } from '../types';
 
@@ -157,7 +156,7 @@ function ExpandedRow({ run }: { run: Run }) {
   return (
     <tr>
       <td
-        colSpan={10}
+        colSpan={8}
         style={{
           padding: 0,
           background: 'var(--dd-surface-2)',
@@ -288,29 +287,67 @@ function ExpandedRow({ run }: { run: Run }) {
 
 const PAGE_SIZE = 20;
 
+const DATE_RANGES = [
+  { label: 'All time', days: 0 },
+  { label: 'Last 24h', days: 1 },
+  { label: 'Last 7 days', days: 7 },
+  { label: 'Last 30 days', days: 30 },
+];
+
+function DropdownMenu({ open, onClose, children }: { open: boolean; onClose: () => void; children: React.ReactNode }) {
+  if (!open) return null;
+  return (
+    <>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={onClose} />
+      <div style={{
+        position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 100,
+        background: 'var(--dd-surface-2)', border: '1px solid var(--dd-line-2)',
+        borderRadius: 10, padding: '4px 0', minWidth: 180,
+        boxShadow: 'var(--dd-shadow-lg)',
+      }}>
+        {children}
+      </div>
+    </>
+  );
+}
+
+function DropdownItem({ selected, onClick, children }: { selected?: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+        padding: '8px 14px', border: 'none', background: 'transparent',
+        color: selected ? 'var(--dd-accent-bright)' : 'var(--dd-text-2)',
+        fontSize: 12, fontFamily: 'inherit', cursor: 'pointer',
+        transition: 'background 100ms ease',
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+    >
+      <span style={{ width: 14, textAlign: 'center' }}>
+        {selected ? '✓' : ''}
+      </span>
+      {children}
+    </button>
+  );
+}
+
 export default function RunHistory() {
-  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [activeFilters, setActiveFilters] = useState<Set<string>>(
     new Set(['completed', 'failed', 'running'])
   );
+  const [wfFilter, setWfFilter] = useState<string | null>(searchParams.get('wf'));
+  const [dateRange, setDateRange] = useState(30);
+  const [wfDropOpen, setWfDropOpen] = useState(false);
+  const [dateDropOpen, setDateDropOpen] = useState(false);
 
   const { workflows } = useWorkflows();
-  const { processes } = useProcesses();
   const { runs, loading } = useRuns();
-
-  const activeRunsCount = processes.filter((p) => p.status === 'running').length;
-
-  const sidebarWorkflows = workflows.map((wf, i) => ({
-    id: wf.id,
-    name: wf.name,
-    ch: (wf.name[0] ?? 'W').toUpperCase(),
-    color: assignColor(i),
-    tags: wf.tags ?? [],
-    running: false,
-  }));
 
   // Counts for filter chips
   const counts = {
@@ -319,6 +356,9 @@ export default function RunHistory() {
     running: runs.filter((r) => r.status === 'running').length,
     cancelled: runs.filter((r) => r.status === 'cancelled').length,
   };
+
+  const dateRangeLabel = DATE_RANGES.find((d) => d.days === dateRange)?.label ?? 'All time';
+  const wfFilterName = wfFilter ? workflows.find((w) => w.id === wfFilter)?.name ?? 'Unknown' : 'All workflows';
 
   // Filter runs
   const filtered = runs.filter((r) => {
@@ -331,7 +371,15 @@ export default function RunHistory() {
       r.status === 'failed' || r.status === 'timed_out' ? 'failed' : r.status;
     const matchesFilter = activeFilters.size === 0 || activeFilters.has(statusKey);
 
-    return matchesSearch && matchesFilter;
+    const matchesWf = !wfFilter || r.workflow_id === wfFilter;
+
+    let matchesDate = true;
+    if (dateRange > 0 && r.started_at) {
+      const cutoff = Date.now() - dateRange * 86400000;
+      matchesDate = new Date(r.started_at).getTime() >= cutoff;
+    }
+
+    return matchesSearch && matchesFilter && matchesWf && matchesDate;
   });
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -362,26 +410,8 @@ export default function RunHistory() {
   );
 
   return (
-    <div className="dd" style={{ width: '100%', height: '100%' }}>
-      <div className="app-window">
-        <Titlebar path="History" />
-
-        <Sidebar
-          workflows={sidebarWorkflows}
-          activeId=""
-          onSelect={(id) => navigate(`/workflow/${id}`)}
-          onCreate={() => navigate('/workflow/new/edit')}
-        />
-
-        <main
-          className="main"
-          style={{
-            gridArea: 'main',
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--dd-bg)' }}>
+        <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           {/* Page header */}
           <div className="pg-head" style={{ flexShrink: 0 }}>
             <div
@@ -422,18 +452,19 @@ export default function RunHistory() {
                 alignItems: 'center',
                 marginTop: 14,
                 flexWrap: 'wrap',
+                minWidth: 0,
               }}
             >
-              <div style={{ position: 'relative', flex: '0 1 260px' }}>
+              <div style={{ position: 'relative', flex: '0 0 200px', minWidth: 0 }}>
                 <Icon
                   name="search"
-                  size={13}
-                  style={{ position: 'absolute', left: 8, top: 7, color: 'var(--dd-text-4)' }}
+                  size={12}
+                  style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--dd-text-4)', pointerEvents: 'none' }}
                 />
                 <input
                   className="input"
-                  style={{ paddingLeft: 26, fontSize: 12 }}
-                  placeholder="Search by id, workflow, branch…"
+                  style={{ paddingLeft: 28, paddingTop: 5, paddingBottom: 5, fontSize: 12, height: 30, borderRadius: 'var(--dd-radius-xs)' }}
+                  placeholder="Search by id, workflow…"
                   value={search}
                   onChange={(e) => {
                     setSearch(e.target.value);
@@ -442,18 +473,47 @@ export default function RunHistory() {
                 />
               </div>
 
-              {/* Workflow dropdown pill */}
-              <button className="btn btn-secondary btn-sm" style={{ fontSize: 12 }}>
-                <Icon name="filter_alt" size={12} style={{ color: 'var(--dd-text-3)' }} />
-                All workflows
-                <Icon name="expand_more" size={12} style={{ color: 'var(--dd-text-4)' }} />
-              </button>
+              {/* Workflow dropdown */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: 12 }}
+                  onClick={() => { setWfDropOpen(!wfDropOpen); setDateDropOpen(false); }}
+                >
+                  <Icon name="filter_alt" size={12} style={{ color: 'var(--dd-text-3)' }} />
+                  {wfFilterName}
+                  <Icon name="expand_more" size={12} style={{ color: 'var(--dd-text-4)' }} />
+                </button>
+                <DropdownMenu open={wfDropOpen} onClose={() => setWfDropOpen(false)}>
+                  <DropdownItem selected={!wfFilter} onClick={() => { setWfFilter(null); setWfDropOpen(false); setPage(1); }}>
+                    All workflows
+                  </DropdownItem>
+                  {workflows.map((wf) => (
+                    <DropdownItem key={wf.id} selected={wfFilter === wf.id} onClick={() => { setWfFilter(wf.id); setWfDropOpen(false); setPage(1); }}>
+                      {wf.name}
+                    </DropdownItem>
+                  ))}
+                </DropdownMenu>
+              </div>
 
-              {/* Date range pill */}
-              <button className="btn btn-secondary btn-sm" style={{ fontSize: 12 }}>
-                Last 7 days
-                <Icon name="expand_more" size={12} style={{ color: 'var(--dd-text-4)' }} />
-              </button>
+              {/* Date range dropdown */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: 12 }}
+                  onClick={() => { setDateDropOpen(!dateDropOpen); setWfDropOpen(false); }}
+                >
+                  {dateRangeLabel}
+                  <Icon name="expand_more" size={12} style={{ color: 'var(--dd-text-4)' }} />
+                </button>
+                <DropdownMenu open={dateDropOpen} onClose={() => setDateDropOpen(false)}>
+                  {DATE_RANGES.map((dr) => (
+                    <DropdownItem key={dr.days} selected={dateRange === dr.days} onClick={() => { setDateRange(dr.days); setDateDropOpen(false); setPage(1); }}>
+                      {dr.label}
+                    </DropdownItem>
+                  ))}
+                </DropdownMenu>
+              </div>
 
               <FilterChip
                 color="var(--dd-green)"
@@ -509,26 +569,24 @@ export default function RunHistory() {
                 Loading run history…
               </div>
             ) : (
-              <table className="dd-table">
+              <table className="dd-table" style={{ tableLayout: 'fixed' }}>
                 <thead>
                   <tr>
-                    <th style={{ width: 30 }} />
-                    <th style={{ width: 70 }}>ID</th>
+                    <th style={{ width: 36 }} />
+                    <th style={{ width: 72 }}>ID</th>
                     <th>Workflow</th>
-                    <th style={{ width: 80 }}>Status</th>
-                    <th style={{ width: 80 }}>Duration</th>
-                    <th style={{ width: 70 }}>Steps</th>
-                    <th>Branch</th>
-                    <th style={{ width: 90 }}>By</th>
-                    <th style={{ width: 110 }}>When</th>
-                    <th style={{ width: 40 }} />
+                    <th style={{ width: 90 }}>Status</th>
+                    <th style={{ width: 90 }}>Duration</th>
+                    <th style={{ width: 80 }}>Trigger</th>
+                    <th style={{ width: 100 }}>When</th>
+                    <th style={{ width: 36 }} />
                   </tr>
                 </thead>
                 <tbody>
                   {pageRows.length === 0 && (
                     <tr>
                       <td
-                        colSpan={10}
+                        colSpan={8}
                         style={{
                           textAlign: 'center',
                           color: 'var(--dd-text-4)',
@@ -557,7 +615,7 @@ export default function RunHistory() {
                         {dateGroup !== prevDateGroup && (
                           <tr key={`group-${run.id}`}>
                             <td
-                              colSpan={10}
+                              colSpan={8}
                               style={{
                                 padding: '12px 14px 6px',
                                 background: 'var(--dd-bg)',
@@ -604,16 +662,7 @@ export default function RunHistory() {
                             <StatusBadge status={run.status} />
                           </td>
                           <td className="mono">{formatDuration(run.duration_ms)}</td>
-                          <td className="mono" style={{ color: 'var(--dd-text-3)' }}>
-                            —
-                          </td>
-                          <td
-                            className="mono"
-                            style={{ fontSize: 11, color: 'var(--dd-text-3)' }}
-                          >
-                            —
-                          </td>
-                          <td style={{ color: 'var(--dd-text-2)' }}>
+                          <td style={{ color: 'var(--dd-text-3)', fontSize: 12 }}>
                             {run.params_used?.triggered_by ?? 'manual'}
                           </td>
                           <td
@@ -679,9 +728,6 @@ export default function RunHistory() {
             </button>
           </div>
         </main>
-
-        <StatusBar processCount={processes.length} activeRuns={activeRunsCount} />
-      </div>
     </div>
   );
 }
