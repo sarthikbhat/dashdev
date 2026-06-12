@@ -11,7 +11,6 @@ const PKG_ROOT = path.resolve(__dirname, "..");
 const SERVER_ENTRY = path.join(PKG_ROOT, "dist/server/index.js");
 const HOME_DIR = path.join(os.homedir(), ".devdash");
 const PID_FILE = path.join(HOME_DIR, "devdash.pid");
-const LOG_FILE = path.join(HOME_DIR, "devdash.log");
 const PORT = parseInt(process.env.DEVDASH_PORT ?? "3847", 10);
 
 const PLIST_LABEL = "com.devdash.server";
@@ -38,9 +37,6 @@ switch (cmd) {
     break;
   case "open":
     openBrowser();
-    break;
-  case "logs":
-    logs();
     break;
   case "install":
     installLaunchd();
@@ -72,21 +68,20 @@ function start() {
     return;
   }
 
-  const logFd = fs.openSync(LOG_FILE, "a");
+  const devNull = fs.openSync("/dev/null", "w");
   const child = spawn("node", [SERVER_ENTRY], {
     detached: true,
-    stdio: ["ignore", logFd, logFd],
+    stdio: ["ignore", devNull, devNull],
     env: { ...process.env, DEVDASH_PORT: String(PORT) },
     cwd: PKG_ROOT,
   });
 
   child.unref();
   fs.writeFileSync(PID_FILE, String(child.pid));
-  fs.closeSync(logFd);
+  fs.closeSync(devNull);
 
   console.log(`DevDash started (pid ${child.pid})`);
   console.log(`  http://localhost:${PORT}`);
-  console.log(`  Logs: ${LOG_FILE}`);
 }
 
 function stop() {
@@ -136,16 +131,6 @@ function doOpen() {
   else console.log(`Open ${url} in your browser`);
 }
 
-function logs() {
-  if (!fs.existsSync(LOG_FILE)) {
-    console.log("No logs yet. Start DevDash first.");
-    return;
-  }
-  const lines = fs.readFileSync(LOG_FILE, "utf-8").split("\n");
-  const tail = lines.slice(-50).join("\n");
-  console.log(tail);
-}
-
 function installLaunchd() {
   if (process.platform !== "darwin") {
     console.log("Auto-start install is only supported on macOS (launchd)");
@@ -177,9 +162,9 @@ function installLaunchd() {
   <key>KeepAlive</key>
   <true/>
   <key>StandardOutPath</key>
-  <string>${LOG_FILE}</string>
+  <string>/dev/null</string>
   <key>StandardErrorPath</key>
-  <string>${LOG_FILE}</string>
+  <string>/dev/null</string>
   <key>WorkingDirectory</key>
   <string>${PKG_ROOT}</string>
 </dict>
@@ -223,7 +208,6 @@ function help() {
     dashdev restart     Restart the server
     dashdev status      Check if the server is running
     dashdev open        Open the dashboard in your browser
-    dashdev logs        Show recent server logs
 
     dashdev install     Auto-start on login (macOS launchd)
     dashdev uninstall   Remove auto-start

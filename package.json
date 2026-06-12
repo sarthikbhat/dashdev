@@ -1,6 +1,6 @@
 {
   "name": "dashdev",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local development dashboard — services, workflows, CI/CD, Redis, and git repos in one place",
   "repository": {
     "type": "git",

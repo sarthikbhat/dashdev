@@ -18,7 +18,6 @@ dashdev stop        # Stop the server
 dashdev restart     # Restart the server
 dashdev status      # Check if running
 dashdev open        # Open dashboard in browser
-dashdev logs        # View server logs
 ```
 
 Dashboard runs at [http://localhost:3847](http://localhost:3847).
@@ -96,7 +95,6 @@ Full history of every workflow run with duration, status, step-by-step logs, and
 All data is stored in `~/.devdash/`:
 - `devdash.db` — SQLite database (services, workflows, runs, settings)
 - `workflows/` — YAML and JS workflow files (auto-synced)
-- `devdash.log` — Server logs
 - `devdash.pid` — PID file for background daemon
 
 ## Adding Workflows
