@@ -1,5 +1,5 @@
 {
-  "name": "devdash",
+  "name": "dashdev",
   "version": "0.1.0",
   "description": "Local development dashboard — services, workflows, CI/CD, Redis, and git repos in one place",
   "repository": {
@@ -18,7 +18,7 @@
     "dist/ui/**"
   ],
   "bin": {
-    "devdash": "./bin/devdash.js"
+    "dashdev": "./bin/devdash.js"
   },
   "scripts": {
     "dev": "tsx watch server/index.ts",

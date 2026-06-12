@@ -7,18 +7,18 @@ A local development dashboard that brings together your services, workflows, CI/
 ## Install
 
 ```bash
-npm install -g devdash
+npm install -g dashdev
 ```
 
 ## Usage
 
 ```bash
-devdash start       # Start the server in the background
-devdash stop        # Stop the server
-devdash restart     # Restart the server
-devdash status      # Check if running
-devdash open        # Open dashboard in browser
-devdash logs        # View server logs
+dashdev start       # Start the server in the background
+dashdev stop        # Stop the server
+dashdev restart     # Restart the server
+dashdev status      # Check if running
+dashdev open        # Open dashboard in browser
+dashdev logs        # View server logs
 ```
 
 Dashboard runs at [http://localhost:3847](http://localhost:3847).
@@ -26,8 +26,8 @@ Dashboard runs at [http://localhost:3847](http://localhost:3847).
 ### Auto-start on login (macOS)
 
 ```bash
-devdash install     # Register as launchd service
-devdash uninstall   # Remove auto-start
+dashdev install     # Register as launchd service
+dashdev uninstall   # Remove auto-start
 ```
 
 ## Features

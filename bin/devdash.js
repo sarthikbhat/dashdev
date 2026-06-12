@@ -112,7 +112,7 @@ function status() {
     console.log(`  http://localhost:${PORT}`);
   } else {
     console.log("DevDash is not running");
-    console.log("  Run: devdash start");
+    console.log("  Run: dashdev start");
   }
 }
 
@@ -197,7 +197,7 @@ function installLaunchd() {
   console.log("  Starts automatically on login");
   console.log("  Restarts if it crashes");
   console.log(`  http://localhost:${PORT}`);
-  console.log(`\n  To remove: devdash uninstall`);
+  console.log(`\n  To remove: dashdev uninstall`);
 }
 
 function uninstallLaunchd() {
@@ -215,18 +215,18 @@ function uninstallLaunchd() {
 
 function help() {
   console.log(`
-  devdash — local development dashboard
+  dashdev — local development dashboard
 
   Usage:
-    devdash start       Start the server in the background
-    devdash stop        Stop the background server
-    devdash restart     Restart the server
-    devdash status      Check if the server is running
-    devdash open        Open the dashboard in your browser
-    devdash logs        Show recent server logs
+    dashdev start       Start the server in the background
+    dashdev stop        Stop the background server
+    dashdev restart     Restart the server
+    dashdev status      Check if the server is running
+    dashdev open        Open the dashboard in your browser
+    dashdev logs        Show recent server logs
 
-    devdash install     Auto-start on login (macOS launchd)
-    devdash uninstall   Remove auto-start
+    dashdev install     Auto-start on login (macOS launchd)
+    dashdev uninstall   Remove auto-start
 
   Environment:
     DEVDASH_PORT        Server port (default: 3847)
