@@ -43,7 +43,7 @@ Track and manage local services (databases, APIs, workers). See health status at
 
 ![Services](docs/screenshots/services.png)
 
-### Workflow Builder
+### Workflows
 
 Create multi-step workflows visually. Add commands from a template sidebar, chain them in sequence or parallel, and configure parameters.
 
@@ -51,6 +51,8 @@ Create multi-step workflows visually. Add commands from a template sidebar, chai
 - Drag-and-drop step ordering
 - Parameter auto-detection from `${PLACEHOLDER}` syntax
 - Run with custom inputs via parameter modal
+
+![Workflows](docs/screenshots/workflow.png)
 
 ![Workflow Builder](docs/screenshots/workflow-builder.png)
 
@@ -62,8 +64,6 @@ View your GitHub pull requests, review requests, and CI runs in one place. No mo
 - PRs awaiting your review
 - Recent CI/CD runs across repos
 
-![CI/CD](docs/screenshots/cicd.png)
-
 ### Redis Explorer
 
 Browse and edit Redis keys without a CLI. Supports all data types.
@@ -72,8 +72,6 @@ Browse and edit Redis keys without a CLI. Supports all data types.
 - View/edit string, hash, list, set, sorted set values
 - Server info dashboard (memory, clients, uptime)
 - TTL display and key deletion
-
-![Redis](docs/screenshots/redis.png)
 
 ### Git Repos
 
@@ -84,13 +82,9 @@ Track all your local repositories from one screen. See which repos have uncommit
 - One-click fetch and pull
 - Last commit info
 
-![Git Status](docs/screenshots/git-status.png)
-
 ### Run History
 
 Full history of every workflow run with duration, status, step-by-step logs, and exit codes.
-
-![History](docs/screenshots/history.png)
 
 ## Configuration
 
