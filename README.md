@@ -1,4 +1,4 @@
-# DevDash
+# DashDev
 
 A local development dashboard that brings together your services, workflows, CI/CD, Redis, and git repos into one interface. Runs as a background service on your machine.
 
@@ -120,8 +120,8 @@ Or create workflows from the UI using the visual workflow builder.
 ## Development
 
 ```bash
-git clone https://github.com/sarthikbhat/devdash.git
-cd devdash
+git clone https://github.com/sarthikbhat/DashDev.git
+cd DashDev
 npm install
 cd ui && npm install && cd ..
 npm run dev:all
